@@ -1,0 +1,222 @@
+%{
+#include "TaskInput.hh"
+
+%}
+
+// This file is generated automatically from TaskInput.hh .  It is an
+//   intermediate file useful for debugging, but otherwise may be deleted.
+
+ marshaling class MarshaledTaskInput (TaskInput* param) {
+
+        string inDirName;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->inDirName, sizeof(string));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->inDirName, $$, sizeof(string));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(string);
+
+    }
+
+        string outDirName;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->outDirName, sizeof(string));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->outDirName, $$, sizeof(string));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(string);
+
+    }
+
+        string fileName;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->fileName, sizeof(string));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->fileName, $$, sizeof(string));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(string);
+
+    }
+
+        double prevTemp;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->prevTemp, sizeof(double));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->prevTemp, $$, sizeof(double));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(double);
+
+    }
+
+        double newTemp;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->newTemp, sizeof(double));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->newTemp, $$, sizeof(double));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(double);
+
+    }
+
+        double totalFileSize2;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->totalFileSize2, sizeof(double));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->totalFileSize2, $$, sizeof(double));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(double);
+
+    }
+
+        double sumFileSize2;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->sumFileSize2, sizeof(double));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->sumFileSize2, $$, sizeof(double));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(double);
+
+    }
+
+        double sumDuration;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->sumDuration, sizeof(double));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->sumDuration, $$, sizeof(double));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(double);
+
+    }
+
+        bool ascii;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->ascii, sizeof(bool));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->ascii, $$, sizeof(bool));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(bool);
+
+    }
+
+        bool log;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->log, sizeof(bool));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->log, $$, sizeof(bool));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(bool);
+
+    }
+
+        bool overWrite;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->overWrite, sizeof(bool));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->overWrite, $$, sizeof(bool));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(bool);
+
+    }
+
+        int index;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->index, sizeof(int));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->index, $$, sizeof(int));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(int);
+
+    }
+
+        int totalNumFiles;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->totalNumFiles, sizeof(int));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->totalNumFiles, $$, sizeof(int));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(int);
+
+    }
+	unmarshaling constructor {
+	$THIS = new TaskInput();
+	}
+}
+
