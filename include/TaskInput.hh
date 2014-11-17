@@ -41,6 +41,7 @@ class TaskInput
         }
 
         TaskInput(string in1, string in2, string in3, double in4, double in5, bool in6, bool in7, bool in8)
+        : totalFileSize2(0), sumFileSize2(0), sumDuration(0), index(0), totalNumFiles(0)
         {
             inDirName=in1;
             outDirName=in2;

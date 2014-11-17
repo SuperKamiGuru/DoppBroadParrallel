@@ -79,11 +79,13 @@ bool GetAllFiles(string inFileName, std::vector<string> &inFileList);
 bool FindTemp(string name, double &tempMatch);
 bool FindTemp(string name, double tempMatch, int &count);
 bool FindProcess(string fileName, int &process);
+bool CompleteFile(string fileName);
 void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNoDep, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList);
 void SwapListElem(std::vector<string> &inFileList, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList, int i, int j);
 bool CompareIsotopeNum(string name1, string name2, string comparison);
 bool DirectoryExists( const char* pzPath );
 bool FindDir(string &inFileName, string &outFileName, double prevTemp, double newTemp);
+bool ExtractDouble(string name, double &num);
 void GetClosestTempDir(string &inFileName, double &prevTemp, double newTemp);
 
 #if Timer>=1
@@ -115,6 +117,10 @@ void SetDataStream( string, std::stringstream&, bool ascii, bool, std::ofstream*
 std::vector<double> theFileSize2List;
 std::ofstream *logFileData=NULL;
 bool master;
+TaskOutput *taskOut;
+MarshaledTaskOutput *taskOutMarsh;
+MarshaledTaskInput *taskInMarsh;
+TaskInput *taskIn;
 
 TOPC_BUF DoBroadening(void *input)
 {
@@ -136,23 +142,29 @@ TOPC_BUF DoBroadening(void *input)
     duration = double(std::clock()-start)/CLOCKS_PER_SEC;
     #endif
 
-    TaskOutput results(duration, success);
+    if(taskOut)
+        delete taskOut;
+    taskOut = new TaskOutput(inputTask->inDirName, inputTask->outDirName, inputTask->fileName, inputTask->prevTemp, inputTask->newTemp, inputTask->totalFileSize2, inputTask->sumFileSize2, inputTask->sumDuration,
+                                inputTask->ascii, inputTask->log, inputTask->overWrite, inputTask->index, inputTask->totalNumFiles, duration, success);
+    if(taskOutMarsh)
+        delete taskOutMarsh;
+    taskOutMarsh = new MarshaledTaskOutput(taskOut);
 
-    MarshaledTaskOutput outputTask(&results);
-
-    return TOPC_MSG( outputTask.getBuffer(), outputTask.getBufferSize());
+    return TOPC_MSG( taskOutMarsh->getBuffer(), taskOutMarsh->getBufferSize());
 }
 
 TOPC_ACTION CheckProgress(void *input, void *output)
 {
     #if Timer>=1
+    /*
     MarshaledTaskInput inputTaskMarsh(input);
     TaskInput* inputTask = inputTaskMarsh.unmarshal();
-
+    */
     MarshaledTaskOutput outputTaskMarsh(output);
     TaskOutput* outputTask = outputTaskMarsh.unmarshal();
 
-    PrintProgress(inputTask->index, inputTask->fileName, theFileSize2List, inputTask->totalFileSize2, inputTask->totalNumFiles, outputTask->duration, inputTask->sumFileSize2, inputTask->sumDuration, outputTask->success);
+
+    PrintProgress(outputTask->index, outputTask->fileName, theFileSize2List, outputTask->totalFileSize2, outputTask->totalNumFiles, outputTask->duration, outputTask->sumFileSize2, outputTask->sumDuration, outputTask->success);
     #endif
     return NO_ACTION;
 }
@@ -243,6 +255,8 @@ int main(int argc, char **argv)
             delete CLHEPRand;
             delete theEngine;
             elementNames.ClearStore();
+            TOPC_raw_end_master_slave();
+            TOPC_finalize();
             return 0;
         }
 
@@ -319,6 +333,8 @@ int main(int argc, char **argv)
             delete CLHEPRand;
             delete theEngine;
             elementNames.ClearStore();
+            TOPC_raw_end_master_slave();
+            TOPC_finalize();
             return 1;
     }
 
@@ -341,6 +357,8 @@ int main(int argc, char **argv)
         delete CLHEPRand;
         delete theEngine;
         elementNames.ClearStore();
+        TOPC_raw_end_master_slave();
+        TOPC_finalize();
         return 1;
     }
 
@@ -349,6 +367,24 @@ int main(int argc, char **argv)
         if (outFileName.back()=='/')
         {
             logFileName=outFileName+"LogDopplerBroadData";
+            if(!(DirectoryExists(outFileName.c_str())))
+            {
+                system( ("mkdir -p -m=666 "+outFileName).c_str());
+                if(DirectoryExists(outFileName.c_str()))
+                {
+                    cout << "### Created Output Directory " << outFileName << " ###" << endl;
+
+                }
+                else
+                {
+                    delete CLHEPRand;
+                    delete theEngine;
+                    elementNames.ClearStore();
+                    TOPC_raw_end_master_slave();
+                    TOPC_finalize();
+                    return 1;
+                }
+            }
         }
         else
         {
@@ -379,7 +415,7 @@ int main(int argc, char **argv)
 
         logFileName+=".txt";
 
-        logFileData = new std::ofstream( logFileName.c_str() , std::ios::out | std::ios::app );
+        logFileData = new std::ofstream( logFileName.c_str() , std::ios::out | std::ios::trunc );
         if(!logFileData->good())
         {
             cout << "### Error: could not open log file ###" << endl;
@@ -388,6 +424,8 @@ int main(int argc, char **argv)
             delete CLHEPRand;
             delete theEngine;
             elementNames.ClearStore();
+            TOPC_raw_end_master_slave();
+            TOPC_finalize();
             return 1;
         }
 
@@ -460,14 +498,19 @@ int main(int argc, char **argv)
                     }
                     if(temp)
                     {
+                        if(taskIn)
+                            delete taskIn;
                         #if Timer>=1
-                            TaskInput input(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, index, totalNumFiles);
+                            taskIn = new TaskInput(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, index, totalNumFiles);
                         #else
-                            TaskInput input(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], ascii, log, overWrite);
+                            taskIn = new TaskInput(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], ascii, log, overWrite);
                         #endif
 
-                        MarshaledTaskInput *inputMarsh = new MarshaledTaskInput(&input);
-                        TOPC_raw_submit_task_input( TOPC_MSG(inputMarsh->getBuffer(), inputMarsh->getBufferSize()) );
+                        if(taskInMarsh)
+                            delete taskInMarsh;
+
+                        taskInMarsh = new MarshaledTaskInput(taskIn);
+                        TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
                     }
                 }
 
@@ -482,24 +525,30 @@ int main(int argc, char **argv)
                     GetFileSize2List(inFileName, theFileSize2List, totalNumFiles, totalFileSize2);
                     double sumDuration=0;
                 #endif
-                stringstream numConv;
-                numConv << newTemp;
 
                 FindDir(inFileName, outFileName, prevTemp, newTemp);
 
                 #if Timer>=1
-                    ConvertDirect(inFileName, outFileName+numConv.str()+'k'+'/', prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                    ConvertDirect(inFileName, outFileName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
                 #else
                     ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
                 #endif
-
-                numConv.str("");
-                numConv.clear();
             }
         }
 
         else if (inFileName.back()=='/')
         {
+            //if closestTemp is set search in the given input file directory for a temperature directory closest to newTemp
+            if(closestTemp)
+            {
+                GetClosestTempDir(inFileName, prevTemp, newTemp);
+            }
+            // else if the inFileName doesn't already contain the temperature directory search in the given input file directory for a temperature directory with temperature prevTemp
+            else
+            {
+                 FindDir(inFileName, outFileName, prevTemp, newTemp);
+            }
+
             #if Timer>=1
                 //std::vector<double> fileSize2List(1400);
                 int totalNumFiles=0, index=0;
@@ -507,17 +556,6 @@ int main(int argc, char **argv)
                 GetFileSize2List(inFileName, theFileSize2List, totalNumFiles, totalFileSize2);
                 double sumDuration=0;
             #endif
-
-            //if closestTemp is set search in the given input file directory for a temperature directory closest to newTemp
-            if(closestTemp)
-            {
-                GetClosestTempDir(inFileName, prevTemp, newTemp);
-            }
-            // else search in the given input file directory for a temperature directory with temperature prevTemp
-            else
-            {
-                 FindDir(inFileName, outFileName, prevTemp, newTemp);
-            }
 
             DIR *dir;
             struct dirent *ent;
@@ -573,14 +611,19 @@ int main(int argc, char **argv)
                 }
                 else
                 {
+                    if(taskIn)
+                        delete taskIn;
                     #if Timer>=1
-                        TaskInput input(inFileName, outFileName, ent->d_name, prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, index, totalNumFiles);
+                        taskIn = new TaskInput(inFileName, outFileName, ent->d_name, prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, index, totalNumFiles);
                     #else
-                        TaskInput input(inDirName, outDirName, ent->d_name, prevTemp, newTemp, ascii, log, overWrite);
+                        taskIn = new TaskInput(inDirName, outDirName, ent->d_name, prevTemp, newTemp, ascii, log, overWrite);
                     #endif
 
-                    MarshaledTaskInput *inputMarsh = new MarshaledTaskInput(&input);
-                    TOPC_raw_submit_task_input( TOPC_MSG(inputMarsh->getBuffer(), inputMarsh->getBufferSize()) );
+                    if(taskInMarsh)
+                        delete taskInMarsh;
+
+                    taskInMarsh = new MarshaledTaskInput(taskIn);
+                    TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
                 }
               }
               closedir(dir);
@@ -588,9 +631,21 @@ int main(int argc, char **argv)
             else
             {
                 cout << "Error: Could not open the given directory" << endl;
+                if (logFileData)
+                    delete logFileData;
+                if(taskOut)
+                    delete taskOut;
+                if(taskOutMarsh)
+                    delete taskOutMarsh;
+                if(taskIn)
+                    delete taskIn;
+                if(taskInMarsh)
+                    delete taskInMarsh;
                 delete CLHEPRand;
                 delete theEngine;
                 elementNames.ClearStore();
+                TOPC_raw_end_master_slave();
+                TOPC_finalize();
                 return 1;
             }
 
@@ -608,6 +663,14 @@ int main(int argc, char **argv)
 
     if (logFileData)
         delete logFileData;
+    if(taskOut)
+        delete taskOut;
+    if(taskOutMarsh)
+        delete taskOutMarsh;
+    if(taskIn)
+        delete taskIn;
+    if(taskInMarsh)
+        delete taskInMarsh;
     delete CLHEPRand;
     delete theEngine;
 
@@ -652,9 +715,12 @@ void GetClosestTempFileList(string inFileName, string outFileName, stringstream&
                     {
                         if(((temp-tempBest[index])>=(temp-tempMatch))&&(tempMatch<temp))
                         {
-                            tempBest[index] = tempMatch;
-                            best[index] = j;
-                            check[index] = true;
+                            if(CompleteFile(allFiles[j]))
+                            {
+                                tempBest[index] = tempMatch;
+                                best[index] = j;
+                                check[index] = true;
+                            }
                         }
                     }
                 }
@@ -832,6 +898,39 @@ bool FindProcess(string fileName, int &process)
     }
 
     return found;
+}
+
+bool CompleteFile(string fileName)
+{
+    stringstream stream;
+    GetDataStream( fileName, stream, false, NULL);
+    int count, numPoints;
+    double dummy;
+
+    if(stream.str()!="")
+    {
+        //skips teo dummy variables and gets the number of CS points
+        stream >> numPoints;
+        stream >> numPoints;
+        stream >> numPoints;
+
+        while(stream)
+        {
+            stream >> dummy;
+            count++;
+        }
+
+        if(count==numPoints)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+        return false;
 }
 
 void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNoDep, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList)
@@ -1025,7 +1124,7 @@ bool FindDir(string &inFileName, string &outFileName, double prevTemp, double ne
     stringstream numConv;
     double temp;
     const string originalIn=inFileName;
-    string outTemp;
+    string outTemp, fileName;
 
     numConv << newTemp;
     numConv >> outTemp;
@@ -1034,21 +1133,19 @@ bool FindDir(string &inFileName, string &outFileName, double prevTemp, double ne
     {
       while ((ent = readdir (dir)) != NULL)
       {
-        if((string(ent->d_name)!="..")||(string(ent->d_name)!="."))
+        fileName=string(ent->d_name);
+        if((fileName!="..")&&(fileName!="."))
         {
-            for(int i=0; i<int(string(ent->d_name).size()); i++)
-            {
-                if((((ent->d_name)[i]>='0')&&((ent->d_name)[i]<='9'))||((ent->d_name)[i]=='.'))
-                {
-                    foundDouble=true;
-                    numConv << (ent->d_name)[i];
-                }
-            }
-            numConv >> temp;
-            if (foundDouble&&(temp==prevTemp))
+            if ((ExtractDouble( fileName, temp))&&(temp==prevTemp)&&((fileName.back()=='k')||(fileName.back()=='K')))
             {
                 inFileName=inFileName+ent->d_name+'/';
-                outFileName=outFileName+outTemp+'k'+'/';
+                // else if the inFileName doesn't already contain the temperature directory search in the given input file directory for a temperature directory with temperature prevTemp
+                double tempEx=-100;
+                string partName = outFileName.substr(outFileName.find_last_of('/',outFileName.length()-2), string::npos);
+                if(!(ExtractDouble(partName, tempEx)&&(tempEx==newTemp)))
+                {
+                     outFileName=outFileName+outTemp+'k'+'/';
+                }
                 check=true;
                 break;
             }
@@ -1074,6 +1171,23 @@ bool FindDir(string &inFileName, string &outFileName, double prevTemp, double ne
     }
 
     return check;
+}
+
+bool ExtractDouble(string name, double &num)
+{
+    bool foundDouble = false;
+    stringstream numConv;
+    for(int i=0; i<int(name.size()); i++)
+    {
+        if(((name[i]>='0')&&(name[i]<='9'))||(name[i]=='.'))
+        {
+            foundDouble=true;
+            numConv << (name)[i];
+        }
+    }
+    if(foundDouble)
+        numConv >> num;
+    return foundDouble;
 }
 
 void GetClosestTempDir(string &inFileName, double &prevTemp, double newTemp)
@@ -1303,11 +1417,16 @@ void ConvertDirect(string inDirName, string outDirName, double prevTemp, double 
             if(temp)
             {
                 fileName = ent->d_name;
+                if(taskIn)
+                    delete taskIn;
 
-                TaskInput input(inDirName, outDirName, fileName, prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, index, totalNumFiles);
+                taskIn = new TaskInput(inDirName, outDirName, fileName, prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, index, totalNumFiles);
 
-                MarshaledTaskInput *inputMarsh = new MarshaledTaskInput(&input);
-                TOPC_raw_submit_task_input( TOPC_MSG(inputMarsh->getBuffer(), inputMarsh->getBufferSize()) );
+                if(taskInMarsh)
+                    delete taskInMarsh;
+
+                taskInMarsh = new MarshaledTaskInput(taskIn);
+                TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
             }
             else
             {
@@ -1336,57 +1455,62 @@ bool isApplicable(string fileName)
 
 void ExtractZA(string fileName, int &Z, int &A)
 {
-        std::size_t startPos=0;
-        stringstream ss;
-        ElementNames* elementNames;
-        while(startPos!=fileName.length() && (fileName[startPos]<'0' || fileName[startPos]>'9'))
-            startPos++;
+    if(fileName=="")
+    {
+        Z=A=-1;
+        return;
+    }
+    std::size_t startPos=0;
+    stringstream ss;
+    ElementNames* elementNames;
+    while(startPos!=fileName.length() && (fileName[startPos]<'0' || fileName[startPos]>'9'))
+        startPos++;
 
-        if(startPos==fileName.length())
+    if(startPos==fileName.length())
+    {
+        Z=A=-1;
+    }
+    else
+    {
+    ////
+        std::size_t found1 = fileName.find_first_of('_', startPos);
+        if (found1==std::string::npos)
         {
             Z=A=-1;
         }
         else
         {
-        ////
-            std::size_t found1 = fileName.find_first_of('_', startPos);
-            if (found1==std::string::npos)
+            std::size_t found2 = fileName.find_first_of('_', found1+1);
+            if (found2==std::string::npos)
             {
                 Z=A=-1;
             }
             else
             {
-                std::size_t found2 = fileName.find_first_of('_', found1+1);
-                if (found2==std::string::npos)
+
+                ss.str(fileName.substr(startPos, found1));
+                ss >> Z;
+                ss.str("");
+                ss.clear();
+                if(((found2-found1-1) > 2) && (fileName[found2-2] == 'm'))
+                    ss.str(fileName.substr(found1+1, found2-found1-3));
+                else
+                    ss.str(fileName.substr(found1+1, found2-found1-1));
+                ss >> A;
+                ss.str("");
+                ss.clear();
+                ss.str(fileName.substr(found2+1));
+                if (!(elementNames->CheckName(ss.str(), Z)))
                 {
                     Z=A=-1;
                 }
-                else
-                {
-
-                    ss.str(fileName.substr(startPos, found1));
-                    ss >> Z;
-                    ss.str("");
-                    ss.clear();
-                    if(((found2-found1-1) > 2) && (fileName[found2-2] == 'm'))
-                        ss.str(fileName.substr(found1+1, found2-found1-3));
-                    else
-                        ss.str(fileName.substr(found1+1, found2-found1-1));
-                    ss >> A;
-                    ss.str("");
-                    ss.clear();
-                    ss.str(fileName.substr(found2+1));
-                    if (!(elementNames->CheckName(ss.str(), Z)))
-                    {
-                        Z=A=-1;
-                    }
-                    ss.str("");
-                    ss.clear();
-                }
-
+                ss.str("");
+                ss.clear();
             }
 
         }
+
+    }
 }
 
 #else
@@ -1410,10 +1534,15 @@ void ConvertDirect(string inDirName, string outDirName, double prevTemp, double 
             if(temp)
             {
                 fileName = ent->d_name;
-                TaskInput input(inDirName, outDirName, fileName, prevTemp, newTemp, ascii, log, overWrite);
+                if(taskIn)
+                    delete taskIn;
 
-                MarshaledTaskInput inputMarsh = new MarshaledTaskInput(input);
-                TOPC_raw_submit_task_input( TOPC_MSG(inputMarsh->getBuffer(), inputMarsh->getBufferSize()) );
+                taskIn = new TaskInput(inDirName, outDirName, fileName, prevTemp, newTemp, ascii, log, overWrite);
+
+                if(taskInMarsh)
+                    delete taskInMarsh;
+                taskInMarsh = new MarshaledTaskInput(taskIn);
+                TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
             }
             else
             {
@@ -1444,7 +1573,7 @@ bool ConvertFile(string inFileName, string outFileName, double prevTemp, double 
 
     if(log)
     {
-        for(int i=0; i<3; i++)
+        for(int i=0; i<4; i++)
         {
             pos = inFileName.find_last_of('/', pos);
             if(pos == std::string::npos)
@@ -1460,43 +1589,36 @@ bool ConvertFile(string inFileName, string outFileName, double prevTemp, double 
 
         partFileName = inFileName.substr(pos, std::string::npos);
 
+        if((partFileName=="..")||(partFileName=="."))
+        {
+            return false;
+        }
+
         logFile->fill('-');
-        (*logFile) << std::setw(84) << std::left << "Start Broadening "+inFileName << endl;
+        (*logFile) << std::setw(84) << std::left << "Start Broadening "+partFileName << endl;
     }
 
-    int Z=-1, A=-1, result=0;
-    double isoMassC2;
-
-    pos = inFileName.find_last_of('/');
-    if(pos == std::string::npos)
-        pos=0;
-    else
-        pos++;
-
-    fileName = inFileName.substr(pos, std::string::npos);
-    ExtractZA(fileName, Z, A, log, logFile);
-    isoMassC2 = GetNuclearMass(A,Z, log, logFile);
-    if(isoMassC2)
+    if(CompleteFile(inFileName))
     {
-        if(overWrite)
-            result = DoppBroad(inFileName, outFileName, prevTemp, newTemp, isoMassC2, ascii, log, logFile);
+        int Z=-1, A=-1, result=0;
+        double isoMassC2;
+
+        pos = inFileName.find_last_of('/');
+        if(pos == std::string::npos)
+            pos=0;
         else
+            pos++;
+
+        fileName = inFileName.substr(pos, std::string::npos);
+        ExtractZA(fileName, Z, A, log, logFile);
+        isoMassC2 = GetNuclearMass(A,Z, log, logFile);
+        if(isoMassC2)
         {
-            GetDataStream( outFileName, stream, false, NULL);
-            if(stream.str()!="")
+            if(overWrite)
+                result = DoppBroad(inFileName, outFileName, prevTemp, newTemp, isoMassC2, ascii, log, logFile);
+            else
             {
-                //skips teo dummy variables and gets the number of CS points
-                stream >> numPoints;
-                stream >> numPoints;
-                stream >> numPoints;
-
-                while(stream)
-                {
-                    stream >> dummy;
-                    count++;
-                }
-
-                if(count==numPoints)
+                if(CompleteFile(outFileName))
                 {
                     notOverWriten=true;
                 }
@@ -1505,30 +1627,34 @@ bool ConvertFile(string inFileName, string outFileName, double prevTemp, double 
                     result = DoppBroad(inFileName, outFileName, prevTemp, newTemp, isoMassC2, ascii, log, logFile);
                 }
             }
-            else
-            {
-                result = DoppBroad(inFileName, outFileName, prevTemp, newTemp, isoMassC2, ascii, log, logFile);
-            }
+        }
+        else
+        {
+            if(log)
+                (*logFile) << "### Invalid Mass Extract From File " << inFileName << " ###" << endl;
+            result = 1;
+        }
+        if(notOverWriten)
+        {
+            success=false;
+            if(log)
+                (*logFile) << "### " << inFileName << " Already Exists And Is Complete And Will Not Be Over Written ###" << endl;
+        }
+        else if(result)
+        {
+            success=false;
+            if(log)
+                (*logFile) << "### Error: Broadening File " << inFileName << " ###" << endl;
         }
     }
     else
     {
         if(log)
-            (*logFile) << "### Invalid Mass Extract From File " << inFileName << " ###" << endl;
-        result = 1;
+        {
+            (*logFile) << "Input File " << inFileName << " Is Not Complete, Skipping Task" << endl;
+        }
     }
-    if(notOverWriten)
-    {
-        success=false;
-        if(log)
-            (*logFile) << "### " << inFileName << " Already Exists And Is Complete And Will Not Be Over Written ###" << endl;
-    }
-    else if(result)
-    {
-        success=false;
-        if(log)
-            (*logFile) << "### Error: Broadening File " << inFileName << " ###" << endl;
-    }
+
 
     if(log)
     {
@@ -1570,37 +1696,30 @@ bool ConvertFile(string inDirName, string outDirName, string fileName, double pr
 
         partFileName = inDirName.substr(pos, std::string::npos)+fileName;
 
+        if((partFileName=="..")||(partFileName=="."))
+        {
+            return false;
+        }
+
         logFile->fill('-');
         (*logFile) << std::setw(84) << std::left << "Start Broadening "+partFileName << endl;
     }
 
-    int Z=-1, A=-1, result=0;
-    double isoMassC2;
-    ExtractZA(fileName, Z, A, log, logFile);
-    isoMassC2 = GetNuclearMass(A,Z, log, logFile);
-    inDirName += fileName;
-    outDirName += fileName;
-    if(isoMassC2)
+    if(CompleteFile(inDirName+fileName))
     {
-        if(overWrite)
-            result = DoppBroad(inDirName, outDirName, prevTemp, newTemp, isoMassC2, ascii, log, logFile);
-        else
+        int Z=-1, A=-1, result=0;
+        double isoMassC2;
+        ExtractZA(fileName, Z, A, log, logFile);
+        isoMassC2 = GetNuclearMass(A,Z, log, logFile);
+        inDirName += fileName;
+        outDirName += fileName;
+        if(isoMassC2)
         {
-            GetDataStream( outDirName, stream, false, NULL);
-            if(stream.str()!="")
+            if(overWrite)
+                result = DoppBroad(inDirName, outDirName, prevTemp, newTemp, isoMassC2, ascii, log, logFile);
+            else
             {
-                //skips teo dummy variables and gets the number of CS points
-                stream >> numPoints;
-                stream >> numPoints;
-                stream >> numPoints;
-
-                while(stream)
-                {
-                    stream >> dummy;
-                    count++;
-                }
-
-                if(count==numPoints)
+                if(CompleteFile(outDirName))
                 {
                     notOverWriten=true;
                 }
@@ -1609,30 +1728,33 @@ bool ConvertFile(string inDirName, string outDirName, string fileName, double pr
                     result = DoppBroad(inDirName, outDirName, prevTemp, newTemp, isoMassC2, ascii, log, logFile);
                 }
             }
-            else
-            {
-                result = DoppBroad(inDirName, outDirName, prevTemp, newTemp, isoMassC2, ascii, log, logFile);
-            }
+        }
+        else
+        {
+            if(log)
+                (*logFile) << "### Invalid Mass Extract From File " << partFileName << " ###" << endl;
+            result = 1;
+        }
+
+        if(notOverWriten)
+        {
+            success=false;
+            if(log)
+                (*logFile) << "### " << partFileName << " Already Exists And Is Complete And Will Not Be Over Written ###" << endl;
+        }
+        else if(result)
+        {
+            success=false;
+            if(log)
+                (*logFile) << "### Error: Broadening File " << partFileName << " ###" << endl;
         }
     }
     else
     {
         if(log)
-            (*logFile) << "### Invalid Mass Extract From File " << partFileName << " ###" << endl;
-        result = 1;
-    }
-
-    if(notOverWriten)
-    {
-        success=false;
-        if(log)
-            (*logFile) << "### " << partFileName << " Already Exists And Is Complete And Will Not Be Over Written ###" << endl;
-    }
-    else if(result)
-    {
-        success=false;
-        if(log)
-            (*logFile) << "### Error: Broadening File " << partFileName << " ###" << endl;
+        {
+            (*logFile) << "Input File " << inDirName+fileName << " Is Not Complete, Skipping Task" << endl;
+        }
     }
 
     if(log)
