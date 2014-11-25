@@ -36,6 +36,10 @@ using namespace std;
 #include "include/MarshaledTaskInput.h"
 #include "include/MarshaledTaskOutput.h"
 #include "include/MarshaledObj.h"
+#include <new>
+
+// Error is due to passing of string through buffer, char array is currently not unmarshelling properly, use MyString file in the marshelgen examples
+// Error is also due to the accessing of the logfile by the slave, check log creation
 
 // things to do
 
@@ -47,6 +51,7 @@ using namespace std;
 // X take sudo or root password so that it can create files in root protected areas
 // X sort the list of input CS files from the macrofile by temperature and isotope so that isotopes with highier temperatures will be broaden from the output of those with lower temp
 // X get program to use natural elements when isotopes are unavailable
+// X change precision of CS to be within 0.1%
 // allow the program to run in parrallel
 // get rid of unnecessary data being passed through the task input (the data that the slaves already contain and the data for PrintProgress) and use global variables instead
 // create a small code that will filter out points in flat regions and use it before and after DopplerBroad in or to improve the speed of Doppler Broad and G4Stork
@@ -121,6 +126,7 @@ TaskOutput *taskOut;
 MarshaledTaskOutput *taskOutMarsh;
 MarshaledTaskInput *taskInMarsh;
 TaskInput *taskIn;
+int fileIndex=0;
 
 TOPC_BUF DoBroadening(void *input)
 {
@@ -131,12 +137,16 @@ TOPC_BUF DoBroadening(void *input)
 
     bool success=0;
     double duration=0;
+    string inDirName, outDirName, fileName;
 
     MarshaledTaskInput inputTaskMarsh(input);
-
     TaskInput *inputTask = inputTaskMarsh.unmarshal();
 
-    success=ConvertFile(inputTask->inDirName, inputTask->outDirName, inputTask->fileName, inputTask->prevTemp, inputTask->newTemp, inputTask->ascii, inputTask->log, logFileData, inputTask->overWrite);
+    inDirName = (inputTask->inDirName).GetString();
+    outDirName = (inputTask->outDirName).GetString();
+    fileName = (inputTask->fileName).GetString();
+
+    success=ConvertFile(inDirName, outDirName, fileName, inputTask->prevTemp, inputTask->newTemp, inputTask->ascii, inputTask->log, logFileData, inputTask->overWrite);
 
     #if Timer>=1
     duration = double(std::clock()-start)/CLOCKS_PER_SEC;
@@ -144,8 +154,10 @@ TOPC_BUF DoBroadening(void *input)
 
     if(taskOut)
         delete taskOut;
-    taskOut = new TaskOutput(inputTask->inDirName, inputTask->outDirName, inputTask->fileName, inputTask->prevTemp, inputTask->newTemp, inputTask->totalFileSize2, inputTask->sumFileSize2, inputTask->sumDuration,
-                                inputTask->ascii, inputTask->log, inputTask->overWrite, inputTask->index, inputTask->totalNumFiles, duration, success);
+
+    taskOut = new TaskOutput(inDirName.c_str(), outDirName.c_str(), fileName.c_str(), inputTask->prevTemp, inputTask->newTemp, inputTask->totalFileSize2, inputTask->sumFileSize2, inputTask->sumDuration,
+                            inputTask->ascii, inputTask->log, inputTask->overWrite, inputTask->index, inputTask->totalNumFiles, duration, success);
+
     if(taskOutMarsh)
         delete taskOutMarsh;
     taskOutMarsh = new MarshaledTaskOutput(taskOut);
@@ -156,15 +168,12 @@ TOPC_BUF DoBroadening(void *input)
 TOPC_ACTION CheckProgress(void *input, void *output)
 {
     #if Timer>=1
-    /*
-    MarshaledTaskInput inputTaskMarsh(input);
-    TaskInput* inputTask = inputTaskMarsh.unmarshal();
-    */
+
     MarshaledTaskOutput outputTaskMarsh(output);
     TaskOutput* outputTask = outputTaskMarsh.unmarshal();
+    string fileName = (outputTask->fileName).GetString();
 
-
-    PrintProgress(outputTask->index, outputTask->fileName, theFileSize2List, outputTask->totalFileSize2, outputTask->totalNumFiles, outputTask->duration, outputTask->sumFileSize2, outputTask->sumDuration, outputTask->success);
+    PrintProgress(outputTask->index, fileName, theFileSize2List, outputTask->totalFileSize2, outputTask->totalNumFiles, outputTask->duration, outputTask->sumFileSize2, outputTask->sumDuration, outputTask->success);
     #endif
     return NO_ACTION;
 }
@@ -172,11 +181,10 @@ TOPC_ACTION CheckProgress(void *input, void *output)
 int main(int argc, char **argv)
 {
     TOPC_OPT_trace = 0;
-	TOPC_OPT_slave_timeout=10400;
+	TOPC_OPT_slave_timeout=86400;
     TOPC_init(&argc, &argv);
     master = bool(TOPC_is_master());
     int processID = TOPC_rank();
-
 
     CLHEP::HepRandom *CLHEPRand = new CLHEP::HepRandom();
 
@@ -186,8 +194,6 @@ int main(int argc, char **argv)
 
     CLHEPRand->showEngineStatus();
     CLHEPRand->saveEngineStatus();
-
-    TOPC_raw_begin_master_slave( DoBroadening, CheckProgress, NULL );
 
     ElementNames elementNames;
     elementNames.SetElementNames();
@@ -443,180 +449,67 @@ int main(int argc, char **argv)
         }
     }
 
-    if(master)
+    TOPC_raw_begin_master_slave( DoBroadening, CheckProgress, NULL );
+
+    #if Timer>=1
+        theFileSize2List.reserve(1400);
+    #endif
+// creates doppler broadened files using the settings in the macrofile
+    if(macro)
     {
-        #if Timer>=1
-            theFileSize2List.reserve(1400);
-        #endif
-    // creates doppler broadened files using the settings in the macrofile
-        if(macro)
+        if(closestTemp)
         {
-            if(closestTemp)
-            {
-                std::vector<double> prevTempList, newTempList;
-                std::vector<string> inFileList, inFileListNoDep, outFileList;
-                string inDirName, outDirName;
-                int temp=1;
+            std::vector<double> prevTempList, newTempList;
+            std::vector<string> inFileList, inFileListNoDep, outFileList;
+            string inDirName, outDirName;
+            int temp=1;
 
-                GetClosestTempFileList(inFileName, outFileName, ss, inFileList, inFileListNoDep, outFileList, prevTempList, newTempList);
+            GetClosestTempFileList(inFileName, outFileName, ss, inFileList, inFileListNoDep, outFileList, prevTempList, newTempList);
 
-                cout << "\n" << inFileList.size() << " Files to be Broadened" << endl;
+            cout << "\n" << inFileList.size() << " Files to be Broadened" << endl;
 
-                cout << "\n" << endl;
+            cout << "\n" << endl;
 
-                cout << "\n" << outFileList.size() << " Files that will be Created are:" << endl;
+            cout << "\n" << outFileList.size() << " Files that will be Created are:" << endl;
 
-                cout << "\n" << endl;
-
-                #if Timer>=1
-                    //std::vector<double> fileSize2List(1400);
-                    int totalNumFiles=0, index=0;
-                    double totalFileSize2=0, sumFileSize2=0;
-                    GetFileSize2List(inFileListNoDep, theFileSize2List, totalNumFiles, totalFileSize2);
-                    double sumDuration=0;
-                #endif
-
-                //TOPC_raw_begin_master_slave( DoBroadening(), CheckProgress(), NULL );
-
-                for(int i=0; i<int(inFileList.size()); i++)
-                {
-
-                    inDirName = (inFileList[i]).substr(0,(inFileList[i]).find_last_of('/')+1);
-                    inFileList[i] = (inFileList[i]).substr((inFileList[i]).find_last_of('/')+1, string::npos);
-
-                    outDirName = (outFileList[i]).substr(0,(outFileList[i]).find_last_of('/')+1);
-
-                    if(!(DirectoryExists(outDirName.c_str())))
-                    {
-                        temp = system( ("mkdir -p -m=666 "+outDirName).c_str());
-                        if(DirectoryExists(outDirName.c_str()))
-                        {
-                            if(log)
-                                (*logFileData) << "### Created Output Directory " << outDirName << " ###" << endl;
-                            temp=1;
-                        }
-                    }
-                    if(temp)
-                    {
-                        if(taskIn)
-                            delete taskIn;
-                        #if Timer>=1
-                            taskIn = new TaskInput(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, index, totalNumFiles);
-                        #else
-                            taskIn = new TaskInput(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], ascii, log, overWrite);
-                        #endif
-
-                        if(taskInMarsh)
-                            delete taskInMarsh;
-
-                        taskInMarsh = new MarshaledTaskInput(taskIn);
-                        TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
-                    }
-                }
-
-                //TOPC_raw_end_master_slave();
-            }
-            else
-            {
-                #if Timer>=1
-                    //std::vector<double> fileSize2List(1400);
-                    int totalNumFiles=0, index=0;
-                    double totalFileSize2=0, sumFileSize2=0;
-                    GetFileSize2List(inFileName, theFileSize2List, totalNumFiles, totalFileSize2);
-                    double sumDuration=0;
-                #endif
-
-                FindDir(inFileName, outFileName, prevTemp, newTemp);
-
-                #if Timer>=1
-                    ConvertDirect(inFileName, outFileName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
-                #else
-                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
-                #endif
-            }
-        }
-
-        else if (inFileName.back()=='/')
-        {
-            //if closestTemp is set search in the given input file directory for a temperature directory closest to newTemp
-            if(closestTemp)
-            {
-                GetClosestTempDir(inFileName, prevTemp, newTemp);
-            }
-            // else if the inFileName doesn't already contain the temperature directory search in the given input file directory for a temperature directory with temperature prevTemp
-            else
-            {
-                 FindDir(inFileName, outFileName, prevTemp, newTemp);
-            }
+            cout << "\n" << endl;
 
             #if Timer>=1
                 //std::vector<double> fileSize2List(1400);
                 int totalNumFiles=0, index=0;
                 double totalFileSize2=0, sumFileSize2=0;
-                GetFileSize2List(inFileName, theFileSize2List, totalNumFiles, totalFileSize2);
+                GetFileSize2List(inFileListNoDep, theFileSize2List, totalNumFiles, totalFileSize2);
                 double sumDuration=0;
             #endif
 
-            DIR *dir;
-            struct dirent *ent;
-            if ((dir = opendir (inFileName.c_str())) != NULL)
+            //TOPC_raw_begin_master_slave( DoBroadening(), CheckProgress(), NULL );
+
+            for(int i=0; i<int(inFileList.size()); i++)
             {
-              /* print all the files and directories within directory */
-              while ((ent = readdir (dir)) != NULL)
-              {
-                if(string(ent->d_name)=="Elastic")
+
+                inDirName = (inFileList[i]).substr(0,(inFileList[i]).find_last_of('/')+1);
+                inFileList[i] = (inFileList[i]).substr((inFileList[i]).find_last_of('/')+1, string::npos);
+
+                outDirName = (outFileList[i]).substr(0,(outFileList[i]).find_last_of('/')+1);
+
+                if(!(DirectoryExists(outDirName.c_str())))
                 {
-                    inSubDirName = inFileName + "Elastic/CrossSection/";
-                    outSubDirName = outFileName + "Elastic/CrossSection/";
-
-                    #if Timer>=1
-                        ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
-                    #else
-                        ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
-                    #endif
-
+                    temp = system( ("mkdir -p -m=666 "+outDirName).c_str());
+                    if(DirectoryExists(outDirName.c_str()))
+                    {
+                        if(log)
+                            (*logFileData) << "### Created Output Directory " << outDirName << " ###" << endl;
+                        temp=1;
+                    }
                 }
-                else if(string(ent->d_name)=="Inelastic")
-                {
-                    inSubDirName = inFileName + "Inelastic/CrossSection/";
-                    outSubDirName = outFileName + "Inelastic/CrossSection/";
-
-                    #if Timer>=1
-                        ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
-                    #else
-                        ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
-                    #endif
-                }
-                else if(string(ent->d_name)=="Fission")
-                {
-                    inSubDirName = inFileName + "Fission/CrossSection/";
-                    outSubDirName = outFileName + "Fission/CrossSection/";
-
-                    #if Timer>=1
-                        ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
-                    #else
-                        ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
-                    #endif
-                }
-                else if(string(ent->d_name)=="Capture")
-                {
-                    inSubDirName = inFileName + "Capture/CrossSection/";
-                    outSubDirName = outFileName + "Capture/CrossSection/";
-
-                    #if Timer>=1
-                        ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
-                    #else
-                        ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
-                    #endif
-                }
-                else
+                if(temp)
                 {
                     if(taskIn)
                         delete taskIn;
                     #if Timer>=1
-                        taskIn = new TaskInput(inFileName, outFileName, ent->d_name, prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, index, totalNumFiles);
+                        taskIn = new TaskInput(inDirName.c_str(), outDirName.c_str(), (inFileList[i]).c_str(), prevTempList[i], newTempList[i], totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, fileIndex, totalNumFiles);
                     #else
-                        taskIn = new TaskInput(inDirName, outDirName, ent->d_name, prevTemp, newTemp, ascii, log, overWrite);
+                        taskIn = new TaskInput(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], ascii, log, overWrite);
                     #endif
 
                     if(taskInMarsh)
@@ -625,39 +518,153 @@ int main(int argc, char **argv)
                     taskInMarsh = new MarshaledTaskInput(taskIn);
                     TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
                 }
-              }
-              closedir(dir);
-            }
-            else
-            {
-                cout << "Error: Could not open the given directory" << endl;
-                if (logFileData)
-                    delete logFileData;
-                if(taskOut)
-                    delete taskOut;
-                if(taskOutMarsh)
-                    delete taskOutMarsh;
-                if(taskIn)
-                    delete taskIn;
-                if(taskInMarsh)
-                    delete taskInMarsh;
-                delete CLHEPRand;
-                delete theEngine;
-                elementNames.ClearStore();
-                TOPC_raw_end_master_slave();
-                TOPC_finalize();
-                return 1;
             }
 
+            //TOPC_raw_end_master_slave();
         }
         else
         {
-            ConvertFile(inFileName, outFileName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
+            #if Timer>=1
+                //std::vector<double> fileSize2List(1400);
+                int totalNumFiles=0, index=0;
+                double totalFileSize2=0, sumFileSize2=0;
+                GetFileSize2List(inFileName, theFileSize2List, totalNumFiles, totalFileSize2);
+                double sumDuration=0;
+            #endif
+
+            FindDir(inFileName, outFileName, prevTemp, newTemp);
+
+            #if Timer>=1
+                ConvertDirect(inFileName, outFileName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+            #else
+                ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
+            #endif
+        }
+    }
+
+    else if (inFileName.back()=='/')
+    {
+        //if closestTemp is set search in the given input file directory for a temperature directory closest to newTemp
+        if(closestTemp)
+        {
+            GetClosestTempDir(inFileName, prevTemp, newTemp);
+        }
+        // else if the inFileName doesn't already contain the temperature directory search in the given input file directory for a temperature directory with temperature prevTemp
+        else
+        {
+             FindDir(inFileName, outFileName, prevTemp, newTemp);
         }
 
-        ss.str("");
-        ss.clear();
+        #if Timer>=1
+            //std::vector<double> fileSize2List(1400);
+            int totalNumFiles=0, index=0;
+            double totalFileSize2=0, sumFileSize2=0;
+            GetFileSize2List(inFileName, theFileSize2List, totalNumFiles, totalFileSize2);
+            double sumDuration=0;
+        #endif
+
+        DIR *dir;
+        struct dirent *ent;
+        if ((dir = opendir (inFileName.c_str())) != NULL)
+        {
+          /* print all the files and directories within directory */
+          while ((ent = readdir (dir)) != NULL)
+          {
+            if(string(ent->d_name)=="Elastic")
+            {
+                inSubDirName = inFileName + "Elastic/CrossSection/";
+                outSubDirName = outFileName + "Elastic/CrossSection/";
+
+                #if Timer>=1
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                #else
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
+                #endif
+
+            }
+            else if(string(ent->d_name)=="Inelastic")
+            {
+                inSubDirName = inFileName + "Inelastic/CrossSection/";
+                outSubDirName = outFileName + "Inelastic/CrossSection/";
+
+                #if Timer>=1
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                #else
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
+                #endif
+            }
+            else if(string(ent->d_name)=="Fission")
+            {
+                inSubDirName = inFileName + "Fission/CrossSection/";
+                outSubDirName = outFileName + "Fission/CrossSection/";
+
+                #if Timer>=1
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                #else
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
+                #endif
+            }
+            else if(string(ent->d_name)=="Capture")
+            {
+                inSubDirName = inFileName + "Capture/CrossSection/";
+                outSubDirName = outFileName + "Capture/CrossSection/";
+
+                #if Timer>=1
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                #else
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
+                #endif
+            }
+            else
+            {
+                if(taskIn)
+                    delete taskIn;
+                #if Timer>=1
+                    taskIn = new TaskInput(inFileName.c_str(), outFileName.c_str(), ent->d_name, prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, fileIndex, totalNumFiles);
+                #else
+                    taskIn = new TaskInput(inDirName, outDirName, ent->d_name, prevTemp, newTemp, ascii, log, overWrite);
+                #endif
+
+                if(taskInMarsh)
+                    delete taskInMarsh;
+
+                taskInMarsh = new MarshaledTaskInput(taskIn);
+                TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
+            }
+          }
+          closedir(dir);
+        }
+        else
+        {
+            cout << "Error: Could not open the given directory" << endl;
+            TOPC_raw_end_master_slave();
+            if (logFileData)
+                delete logFileData;
+            if(taskOut)
+                delete taskOut;
+            if(taskOutMarsh)
+                delete taskOutMarsh;
+            if(taskIn)
+                delete taskIn;
+            if(taskInMarsh)
+                delete taskInMarsh;
+            delete CLHEPRand;
+            delete theEngine;
+            elementNames.ClearStore();
+            TOPC_finalize();
+            return 1;
+        }
+
     }
+    else
+    {
+        ConvertFile(inFileName, outFileName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
+    }
+
+    ss.str("");
+    ss.clear();
+
+    TOPC_raw_end_master_slave();
 
     elementNames.ClearStore();
 
@@ -674,7 +681,6 @@ int main(int argc, char **argv)
     delete CLHEPRand;
     delete theEngine;
 
-    TOPC_raw_end_master_slave();
     TOPC_finalize();
 
     return result;
@@ -904,7 +910,7 @@ bool CompleteFile(string fileName)
 {
     stringstream stream;
     GetDataStream( fileName, stream, false, NULL);
-    int count, numPoints;
+    int count=0, numPoints;
     double dummy;
 
     if(stream.str()!="")
@@ -916,9 +922,11 @@ bool CompleteFile(string fileName)
 
         while(stream)
         {
-            stream >> dummy;
+            stream >> dummy >> dummy;
             count++;
         }
+
+        count--;
 
         if(count==numPoints)
         {
@@ -1120,7 +1128,7 @@ bool FindDir(string &inFileName, string &outFileName, double prevTemp, double ne
 {
     DIR *dir;
     struct dirent *ent;
-    bool check=false, foundDouble=false;
+    bool check=false;
     stringstream numConv;
     double temp;
     const string originalIn=inFileName;
@@ -1236,10 +1244,9 @@ void GetClosestTempDir(string &inFileName, double &prevTemp, double newTemp)
 
 void GetFileSize2List(std::vector<string> &fileList, std::vector<double> &fileSize2List, int &totalNumFiles, double &totalFileSize2)
 {
-
     for(int i=0; i<int(fileList.size()); i++)
     {
-        fileSize2List[totalNumFiles]=GetFileSize2(fileList[i]);
+        fileSize2List.push_back(GetFileSize2(fileList[i]));
         totalFileSize2+=fileSize2List[totalNumFiles];
         totalNumFiles++;
     }
@@ -1288,11 +1295,11 @@ void PrintProgress(int &index, string fileName, std::vector<double> &fileSize2Li
 
         cout.fill('-');
         cout << std::setw(84) << std::right << "\n\n";
-        index++;
+        fileIndex++;
 
         if(int(sizeRatio)==1)
         {
-            cout << "The Total Time Taken Was " << sumDuration << "s, " << (totalNumFiles-index) << " Files Were Not Converted" << endl;
+            cout << "The Total Time Taken Was " << sumDuration << "s, " << (totalNumFiles-fileIndex) << " Files Were Not Converted" << endl;
         }
     }
 
@@ -1345,7 +1352,7 @@ void GetFileSize2List(string inFileName, std::vector<double> &fileSize2List, int
             if(isApplicable(ent->d_name))
             {
                 filename = inFileName + ent->d_name;
-                fileSize2List[totalNumFiles]=GetFileSize2(filename);
+                fileSize2List.push_back(GetFileSize2(filename));
                 totalFileSize2+=fileSize2List[totalNumFiles];
                 totalNumFiles++;
             }
@@ -1375,7 +1382,7 @@ void GetDirectoryFileSize2(string inDirName, std::vector<double> &fileSize2List,
         if(isApplicable(fileName))
         {
             fileName = inDirName + fileName;
-            fileSize2List[totalNumFiles]=GetFileSize2(fileName);
+            fileSize2List.push_back(GetFileSize2(fileName));
             totalFileSize2+=fileSize2List[totalNumFiles];
             totalNumFiles++;
         }
@@ -1420,7 +1427,7 @@ void ConvertDirect(string inDirName, string outDirName, double prevTemp, double 
                 if(taskIn)
                     delete taskIn;
 
-                taskIn = new TaskInput(inDirName, outDirName, fileName, prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, index, totalNumFiles);
+                taskIn = new TaskInput(inDirName.c_str(), outDirName.c_str(), fileName.c_str(), prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, fileIndex, totalNumFiles);
 
                 if(taskInMarsh)
                     delete taskInMarsh;
@@ -1568,8 +1575,6 @@ bool ConvertFile(string inFileName, string outFileName, double prevTemp, double 
     string fileName, partFileName;
     bool success=true, notOverWriten=false;
     stringstream stream;
-    int numPoints=0, count=0;
-    double dummy;
 
     if(log)
     {
@@ -1587,15 +1592,17 @@ bool ConvertFile(string inFileName, string outFileName, double prevTemp, double 
         if(pos!=0)
             pos+=2;
 
+        string test = inFileName.substr(inFileName.find_last_of('/', 0), std::string::npos);
+
         partFileName = inFileName.substr(pos, std::string::npos);
 
-        if((partFileName=="..")||(partFileName=="."))
+        if((test=="..")||(test=="."))
         {
             return false;
         }
 
         logFile->fill('-');
-        (*logFile) << std::setw(84) << std::left << "Start Broadening "+partFileName << endl;
+        (*logFile) << '\n' << std::setw(84) << std::left << "Start Broadening "+partFileName << '\n' << endl;
     }
 
     if(CompleteFile(inFileName))
@@ -1673,8 +1680,6 @@ bool ConvertFile(string inDirName, string outDirName, string fileName, double pr
     string partFileName;
     bool success=true, notOverWriten=false;
     stringstream stream;
-    int numPoints=0, count=0;
-    double dummy;
 
     if(log)
     {
@@ -1696,13 +1701,13 @@ bool ConvertFile(string inDirName, string outDirName, string fileName, double pr
 
         partFileName = inDirName.substr(pos, std::string::npos)+fileName;
 
-        if((partFileName=="..")||(partFileName=="."))
+        if((fileName=="..")||(fileName=="."))
         {
             return false;
         }
 
         logFile->fill('-');
-        (*logFile) << std::setw(84) << std::left << "Start Broadening "+partFileName << endl;
+        (*logFile) << '\n' << std::setw(84) << std::left << "Start Broadening "+partFileName << '\n' << endl;
     }
 
     if(CompleteFile(inDirName+fileName))
@@ -2038,7 +2043,7 @@ int DoppBroad(string inFileName, string outFileName, double prevTemp, double new
         nVMag = nPx*invNMassC2;
         invNVMag = 1/nVMag;
 
-        while(counter == 0 || (/*counter < numMaxOL && */std::abs(buffer-result/std::max(1,counter)) > 0.003*buffer))
+        while(counter == 0 || (/*counter < numMaxOL && */std::abs(buffer-result/std::max(1,counter)) > 0.001*buffer))
         {
             if(counter)
                 buffer = result/counter;
@@ -2291,7 +2296,18 @@ void GetDataStream( string filename , std::stringstream& ss, bool log, std::ofst
       {
          int file_size = thefData.tellg();
          thefData.seekg( 0 , std::ios::beg );
-         char* filedata = new char[ file_size ];
+         char* filedata;
+         if(file_size>0)
+            filedata = new char[ file_size ];
+         else
+         {
+            if(in!=NULL)
+            {
+                in->close();
+                delete in;
+            }
+            return;
+         }
          while ( thefData )
          {
             thefData.read( filedata , file_size );

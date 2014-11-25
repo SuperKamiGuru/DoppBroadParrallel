@@ -1,6 +1,8 @@
 %{
 #include "TaskInput.hh"
-
+//MSH_include_begin
+#include "MarshaledMyString.h"
+//MSH_include_end
 %}
 
 // This file is generated automatically from TaskInput.hh .  It is an
@@ -8,51 +10,63 @@
 
  marshaling class MarshaledTaskInput (TaskInput* param) {
 
-        string inDirName;
+        MyString inDirName;
     //FIELDMARSHAL:
     {
-	memcpy($$, &Shadowed_param->inDirName, sizeof(string));
+	MarshaledMyString var(&Shadowed_param->inDirName);
+	EXTEND_BUFFER(var.getBufferSize());
+	$SIZE = var.getBufferSize();
+	memcpy($$, var.getBuffer(), var.getBufferSize());
     }
     //FIELDUNMARSHAL:
     {
-	memcpy(&Shadowed_param->inDirName, $$, sizeof(string));
+	MarshaledMyString var($$, 'u');
+	var.unmarshalTo(&Shadowed_param->inDirName);
 
     }
     //FIELDSIZE:
     {
-	$SIZE = sizeof(string);
+	// no need to declare size since $SIZE is already assigned in the MARSHAL field
 
     }
 
-        string outDirName;
+        MyString outDirName;
     //FIELDMARSHAL:
     {
-	memcpy($$, &Shadowed_param->outDirName, sizeof(string));
+	MarshaledMyString var(&Shadowed_param->outDirName);
+	EXTEND_BUFFER(var.getBufferSize());
+	$SIZE = var.getBufferSize();
+	memcpy($$, var.getBuffer(), var.getBufferSize());
     }
     //FIELDUNMARSHAL:
     {
-	memcpy(&Shadowed_param->outDirName, $$, sizeof(string));
+	MarshaledMyString var($$, 'u');
+	var.unmarshalTo(&Shadowed_param->outDirName);
 
     }
     //FIELDSIZE:
     {
-	$SIZE = sizeof(string);
+	// no need to declare size since $SIZE is already assigned in the MARSHAL field
 
     }
 
-        string fileName;
+        MyString fileName;
     //FIELDMARSHAL:
     {
-	memcpy($$, &Shadowed_param->fileName, sizeof(string));
+	MarshaledMyString var(&Shadowed_param->fileName);
+	EXTEND_BUFFER(var.getBufferSize());
+	$SIZE = var.getBufferSize();
+	memcpy($$, var.getBuffer(), var.getBufferSize());
     }
     //FIELDUNMARSHAL:
     {
-	memcpy(&Shadowed_param->fileName, $$, sizeof(string));
+	MarshaledMyString var($$, 'u');
+	var.unmarshalTo(&Shadowed_param->fileName);
 
     }
     //FIELDSIZE:
     {
-	$SIZE = sizeof(string);
+	// no need to declare size since $SIZE is already assigned in the MARSHAL field
 
     }
 
@@ -181,6 +195,54 @@
     //FIELDSIZE:
     {
 	$SIZE = sizeof(bool);
+
+    }
+
+        int inDirSize;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->inDirSize, sizeof(int));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->inDirSize, $$, sizeof(int));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(int);
+
+    }
+
+        int outDirSize;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->outDirSize, sizeof(int));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->outDirSize, $$, sizeof(int));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(int);
+
+    }
+
+        int fileSize;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->fileSize, sizeof(int));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->fileSize, $$, sizeof(int));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(int);
 
     }
 

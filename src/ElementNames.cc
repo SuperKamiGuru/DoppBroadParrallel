@@ -22,6 +22,7 @@ void ElementNames::ClearStore()
 
 void ElementNames::SetElementNames()
 {
+
     elementName = new string[119];
 
     elementName[0] = "Error";
@@ -171,7 +172,7 @@ bool ElementNames::CheckName(string name, int Z)
     }
     else
     {
-        cout << "### Error SetElementNames() has not been yet ###" << endl;
+        cout << "### Error SetElementNames() has not been called yet ###" << endl;
     }
 
 

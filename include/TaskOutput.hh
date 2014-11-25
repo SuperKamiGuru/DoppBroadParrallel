@@ -1,6 +1,13 @@
 #ifndef TASKOUTPUT_HH
 #define TASKOUTPUT_HH
 
+#include "MyString.h"
+#include <string.h>
+
+//MSH_include_begin
+#include "MarshaledMyString.h"
+//MSH_include_end
+
 //MSH_BEGIN
 class TaskOutput
 {
@@ -9,13 +16,21 @@ class TaskOutput
         {
             duration=0.;
             success=0;
+            inDirSize=0;
+            outDirSize=0;
+            fileSize=0;
         }
-        TaskOutput(string in1, string in2, string in3, double in4, double in5, double in6, double in7, double in8,
+        virtual ~TaskOutput()
+        {
+
+        }
+        TaskOutput(const char *in1, const char *in2, const char *in3, double in4, double in5, double in6, double in7, double in8,
                     bool in9, bool in10, bool in11, int in12, int in13, double in14, bool in15)
         {
-            inDirName=in1;
-            outDirName=in2;
-            fileName=in3;
+            inDirName = *(new MyString(in1));
+            outDirName = *(new MyString(in2));
+            fileName = *(new MyString(in3));
+
             prevTemp=in4;
             newTemp=in5;
             totalFileSize2=in6;
@@ -30,12 +45,13 @@ class TaskOutput
             success=in15;
         }
 
-        TaskOutput(string in1, string in2, string in3, double in4, double in5, bool in6, bool in7, bool in8, double in9, bool in10)
+        TaskOutput(const char *in1, const char *in2, const char *in3, double in4, double in5, bool in6, bool in7, bool in8, double in9, bool in10)
         : totalFileSize2(0), sumFileSize2(0), sumDuration(0), index(0), totalNumFiles(0)
         {
-            inDirName=in1;
-            outDirName=in2;
-            fileName=in3;
+            inDirName = *(new MyString(in1));
+            outDirName = *(new MyString(in2));
+            fileName = *(new MyString(in3));
+
             prevTemp=in4;
             newTemp=in5;
             ascii=in6;
@@ -47,9 +63,10 @@ class TaskOutput
 
         TaskOutput& operator=(const TaskOutput& other)
         {
-            inDirName=other.inDirName;
-            outDirName=other.outDirName;
-            fileName=other.fileName;
+            inDirName = *(new MyString(other.inDirName));
+            outDirName = *(new MyString(other.outDirName));
+            fileName = *(new MyString(other.fileName));
+
             prevTemp=other.prevTemp;
             newTemp=other.newTemp;
             totalFileSize2=other.totalFileSize2;
@@ -65,9 +82,10 @@ class TaskOutput
             return *this;
         }
 
-        string inDirName; //MSH: primitive
-        string outDirName; //MSH: primitive
-        string fileName; //MSH: primitive
+        MyString inDirName; /* MSH: predefined */
+        MyString outDirName; /* MSH: predefined */
+        MyString fileName; /* MSH: predefined */
+
         double prevTemp; //MSH: primitive
         double newTemp; //MSH: primitive
         double totalFileSize2; //MSH: primitive
@@ -76,6 +94,9 @@ class TaskOutput
         bool ascii; //MSH: primitive
         bool log; //MSH: primitive
         bool overWrite; //MSH: primitive
+        int inDirSize; //MSH: primitive
+        int outDirSize; //MSH: primitive
+        int fileSize; //MSH: primitive
         int index; //MSH: primitive
         int totalNumFiles; //MSH: primitive
         double duration;//MSH: primitive

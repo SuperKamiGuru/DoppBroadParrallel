@@ -1,0 +1,52 @@
+%{
+#include "MyString.h"
+
+%}
+
+// This file is generated automatically from MyString.h .  It is an
+//   intermediate file useful for debugging, but otherwise may be deleted.
+
+ marshaling class MarshaledMyString (MyString* param) {
+
+    int len;
+    //FIELDMARSHAL:
+    {
+	memcpy($$, &Shadowed_param->len, sizeof(int));
+    }
+    //FIELDUNMARSHAL:
+    {
+	memcpy(&Shadowed_param->len, $$, sizeof(int));
+
+    }
+    //FIELDSIZE:
+    {
+	$SIZE = sizeof(int);
+
+    }
+
+    char* str;
+    //FIELDMARSHAL:
+    {
+
+	             memcpy($$, (char*)$THIS->buffer(), $THIS->length());
+		     *($$+$THIS->length()) = '\0';
+		  
+    }
+    //FIELDUNMARSHAL:
+    {
+
+	             MyString* tmp = new MyString($$);
+		     memcpy($THIS, tmp, sizeof(MyString));
+		  
+    }
+    //FIELDSIZE:
+    {
+
+		     $SIZE = $THIS->length()+1; //one byte for the null-termination
+		  
+    }
+	unmarshaling constructor {
+	$THIS = new MyString();
+	}
+}
+
