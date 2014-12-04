@@ -127,6 +127,7 @@ MarshaledTaskOutput *taskOutMarsh;
 MarshaledTaskInput *taskInMarsh;
 TaskInput *taskIn;
 int fileIndex=0;
+int fileCount=0;
 
 TOPC_BUF DoBroadening(void *input)
 {
@@ -1282,7 +1283,7 @@ void PrintProgress(int index, string fileName, std::vector<double> &fileSize2Lis
         sumFileSize2+=fileSize2List[index];
         sumDuration+=duration;
         double timeLeft = sumDuration/sumFileSize2*(totalFileSize2-sumFileSize2);
-        cout << "Files Converted (" << index+1 << "/" << totalNumFiles << "), Duration Since Start " << sumDuration << "s, Time Remaining " << timeLeft << "s\n"
+        cout << "Files Converted (" << fileCount+1 << "/" << totalNumFiles << "), Duration Since Start " << sumDuration << "s, Time Remaining " << timeLeft << "s\n"
             << "Total Progress [";
         double sizeRatio = sumFileSize2/totalFileSize2;
         for (int i=0; i<int(60*sizeRatio); i++)
@@ -1302,6 +1303,7 @@ void PrintProgress(int index, string fileName, std::vector<double> &fileSize2Lis
         {
             cout << "The Total Time Taken Was " << sumDuration << "s, " << (totalNumFiles-index) << " Files Were Not Converted" << endl;
         }
+        fileCount++;
     }
 
     else if(isApplicable(fileName))
