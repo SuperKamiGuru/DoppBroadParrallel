@@ -96,7 +96,7 @@ void GetClosestTempDir(string &inFileName, double &prevTemp, double newTemp);
 #if Timer>=1
     void GetFileSize2List(std::vector<string> &fileList, std::vector<double> &fileSize2List, int &totalNumFiles, double &totalFileSize2);
     double GetFileSize2(string fileName);
-    void PrintProgress(int &index, string fileName, std::vector<double> &fileSize2List, double &totalFileSize2, int totalNumFiles, double duration, double &sumFileSize2, double &sumDuration, bool success);
+    void PrintProgress(int index, string fileName, std::vector<double> &fileSize2List, double &totalFileSize2, int &totalNumFiles, double duration, double &sumFileSize2, double &sumDuration, bool success);
     void GetFileSize2List(string inFileName, std::vector<double> &fileSize2List, int &totalNumFiles, double &totalFileSize2);
     void GetDirectoryFileSize2(string inDirName, std::vector<double> &fileSize2List, int &totalNumFiles, double &totalFileSize2);
     void ConvertDirect(string inDirName, string outDirName, double prevTemp, double newTemp, bool ascii, bool log, std::ofstream* logFile,
@@ -518,6 +518,7 @@ int main(int argc, char **argv)
                     taskInMarsh = new MarshaledTaskInput(taskIn);
                     TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
                 }
+                fileIndex++;
             }
 
             //TOPC_raw_end_master_slave();
@@ -630,6 +631,7 @@ int main(int argc, char **argv)
 
                 taskInMarsh = new MarshaledTaskInput(taskIn);
                 TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
+                fileIndex++;
             }
           }
           closedir(dir);
@@ -1273,7 +1275,7 @@ double GetFileSize2(string fileName)
 
 }
 
-void PrintProgress(int &index, string fileName, std::vector<double> &fileSize2List, double &totalFileSize2, int totalNumFiles, double duration, double &sumFileSize2, double &sumDuration, bool success)
+void PrintProgress(int index, string fileName, std::vector<double> &fileSize2List, double &totalFileSize2, int &totalNumFiles, double duration, double &sumFileSize2, double &sumDuration, bool success)
 {
     if(success)
     {
@@ -1295,11 +1297,10 @@ void PrintProgress(int &index, string fileName, std::vector<double> &fileSize2Li
 
         cout.fill('-');
         cout << std::setw(84) << std::right << "\n\n";
-        fileIndex++;
 
         if(int(sizeRatio)==1)
         {
-            cout << "The Total Time Taken Was " << sumDuration << "s, " << (totalNumFiles-fileIndex) << " Files Were Not Converted" << endl;
+            cout << "The Total Time Taken Was " << sumDuration << "s, " << (totalNumFiles-index) << " Files Were Not Converted" << endl;
         }
     }
 
@@ -1308,6 +1309,8 @@ void PrintProgress(int &index, string fileName, std::vector<double> &fileSize2Li
         sumDuration+=duration;
         totalFileSize2-=fileSize2List[index];
         fileSize2List.erase(fileSize2List.begin()+index);
+        totalNumFiles--;
+        fileIndex--;
 
         if(int(sumFileSize2/totalFileSize2)==1)
         {
@@ -1434,6 +1437,7 @@ void ConvertDirect(string inDirName, string outDirName, double prevTemp, double 
 
                 taskInMarsh = new MarshaledTaskInput(taskIn);
                 TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
+                fileIndex++;
             }
             else
             {
