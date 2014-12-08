@@ -102,54 +102,6 @@
 
     }
 
-        double totalFileSize2;
-    //FIELDMARSHAL:
-    {
-	memcpy($$, &Shadowed_param->totalFileSize2, sizeof(double));
-    }
-    //FIELDUNMARSHAL:
-    {
-	memcpy(&Shadowed_param->totalFileSize2, $$, sizeof(double));
-
-    }
-    //FIELDSIZE:
-    {
-	$SIZE = sizeof(double);
-
-    }
-
-        double sumFileSize2;
-    //FIELDMARSHAL:
-    {
-	memcpy($$, &Shadowed_param->sumFileSize2, sizeof(double));
-    }
-    //FIELDUNMARSHAL:
-    {
-	memcpy(&Shadowed_param->sumFileSize2, $$, sizeof(double));
-
-    }
-    //FIELDSIZE:
-    {
-	$SIZE = sizeof(double);
-
-    }
-
-        double sumDuration;
-    //FIELDMARSHAL:
-    {
-	memcpy($$, &Shadowed_param->sumDuration, sizeof(double));
-    }
-    //FIELDUNMARSHAL:
-    {
-	memcpy(&Shadowed_param->sumDuration, $$, sizeof(double));
-
-    }
-    //FIELDSIZE:
-    {
-	$SIZE = sizeof(double);
-
-    }
-
         bool ascii;
     //FIELDMARSHAL:
     {
@@ -198,54 +150,6 @@
 
     }
 
-        int inDirSize;
-    //FIELDMARSHAL:
-    {
-	memcpy($$, &Shadowed_param->inDirSize, sizeof(int));
-    }
-    //FIELDUNMARSHAL:
-    {
-	memcpy(&Shadowed_param->inDirSize, $$, sizeof(int));
-
-    }
-    //FIELDSIZE:
-    {
-	$SIZE = sizeof(int);
-
-    }
-
-        int outDirSize;
-    //FIELDMARSHAL:
-    {
-	memcpy($$, &Shadowed_param->outDirSize, sizeof(int));
-    }
-    //FIELDUNMARSHAL:
-    {
-	memcpy(&Shadowed_param->outDirSize, $$, sizeof(int));
-
-    }
-    //FIELDSIZE:
-    {
-	$SIZE = sizeof(int);
-
-    }
-
-        int fileSize;
-    //FIELDMARSHAL:
-    {
-	memcpy($$, &Shadowed_param->fileSize, sizeof(int));
-    }
-    //FIELDUNMARSHAL:
-    {
-	memcpy(&Shadowed_param->fileSize, $$, sizeof(int));
-
-    }
-    //FIELDSIZE:
-    {
-	$SIZE = sizeof(int);
-
-    }
-
         int index;
     //FIELDMARSHAL:
     {
@@ -254,22 +158,6 @@
     //FIELDUNMARSHAL:
     {
 	memcpy(&Shadowed_param->index, $$, sizeof(int));
-
-    }
-    //FIELDSIZE:
-    {
-	$SIZE = sizeof(int);
-
-    }
-
-        int totalNumFiles;
-    //FIELDMARSHAL:
-    {
-	memcpy($$, &Shadowed_param->totalNumFiles, sizeof(int));
-    }
-    //FIELDUNMARSHAL:
-    {
-	memcpy(&Shadowed_param->totalNumFiles, $$, sizeof(int));
 
     }
     //FIELDSIZE:

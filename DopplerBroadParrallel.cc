@@ -121,13 +121,14 @@ void SetDataStream( string, std::stringstream&, bool ascii, bool, std::ofstream*
 
 std::vector<double> theFileSize2List;
 std::ofstream *logFileData=NULL;
+double theTotalFileSize2=0, theSumFileSize2=0, theSumDuration=0;
+int fileIndex=0, fileCount=0, theTotalNumFiles=0;
+
 bool master;
 TaskOutput *taskOut;
 MarshaledTaskOutput *taskOutMarsh;
 MarshaledTaskInput *taskInMarsh;
 TaskInput *taskIn;
-int fileIndex=0;
-int fileCount=0;
 
 TOPC_BUF DoBroadening(void *input)
 {
@@ -155,9 +156,13 @@ TOPC_BUF DoBroadening(void *input)
 
     if(taskOut)
         delete taskOut;
-
-    taskOut = new TaskOutput(inDirName.c_str(), outDirName.c_str(), fileName.c_str(), inputTask->prevTemp, inputTask->newTemp, inputTask->totalFileSize2, inputTask->sumFileSize2, inputTask->sumDuration,
-                            inputTask->ascii, inputTask->log, inputTask->overWrite, inputTask->index, inputTask->totalNumFiles, duration, success);
+    #if Timer>=1
+    taskOut = new TaskOutput(inDirName.c_str(), outDirName.c_str(), fileName.c_str(), inputTask->prevTemp, inputTask->newTemp,
+                            inputTask->ascii, inputTask->log, inputTask->overWrite, inputTask->index, duration, success);
+    #else
+    taskOut = new TaskOutput(inDirName.c_str(), outDirName.c_str(), fileName.c_str(), inputTask->prevTemp, inputTask->newTemp,
+                            inputTask->ascii, inputTask->log, inputTask->overWrite, duration, success);
+    #endif
 
     if(taskOutMarsh)
         delete taskOutMarsh;
@@ -174,7 +179,7 @@ TOPC_ACTION CheckProgress(void *input, void *output)
     TaskOutput* outputTask = outputTaskMarsh.unmarshal();
     string fileName = (outputTask->fileName).GetString();
 
-    PrintProgress(outputTask->index, fileName, theFileSize2List, outputTask->totalFileSize2, outputTask->totalNumFiles, outputTask->duration, outputTask->sumFileSize2, outputTask->sumDuration, outputTask->success);
+    PrintProgress(outputTask->index, fileName, theFileSize2List, theTotalFileSize2, theTotalNumFiles, outputTask->duration, theSumFileSize2, theSumDuration, outputTask->success);
     #endif
     return NO_ACTION;
 }
@@ -182,7 +187,7 @@ TOPC_ACTION CheckProgress(void *input, void *output)
 int main(int argc, char **argv)
 {
     TOPC_OPT_trace = 0;
-	TOPC_OPT_slave_timeout=86400;
+	TOPC_OPT_slave_timeout=604800;
     TOPC_init(&argc, &argv);
     master = bool(TOPC_is_master());
     int processID = TOPC_rank();
@@ -476,14 +481,9 @@ int main(int argc, char **argv)
             cout << "\n" << endl;
 
             #if Timer>=1
-                //std::vector<double> fileSize2List(1400);
-                int totalNumFiles=0, index=0;
-                double totalFileSize2=0, sumFileSize2=0;
-                GetFileSize2List(inFileListNoDep, theFileSize2List, totalNumFiles, totalFileSize2);
-                double sumDuration=0;
+                int index=0;
+                GetFileSize2List(inFileListNoDep, theFileSize2List, theTotalNumFiles, theTotalFileSize2);
             #endif
-
-            //TOPC_raw_begin_master_slave( DoBroadening(), CheckProgress(), NULL );
 
             for(int i=0; i<int(inFileList.size()); i++)
             {
@@ -508,7 +508,7 @@ int main(int argc, char **argv)
                     if(taskIn)
                         delete taskIn;
                     #if Timer>=1
-                        taskIn = new TaskInput(inDirName.c_str(), outDirName.c_str(), (inFileList[i]).c_str(), prevTempList[i], newTempList[i], totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, fileIndex, totalNumFiles);
+                        taskIn = new TaskInput(inDirName.c_str(), outDirName.c_str(), (inFileList[i]).c_str(), prevTempList[i], newTempList[i], ascii, log, overWrite, fileIndex);
                     #else
                         taskIn = new TaskInput(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], ascii, log, overWrite);
                     #endif
@@ -527,17 +527,14 @@ int main(int argc, char **argv)
         else
         {
             #if Timer>=1
-                //std::vector<double> fileSize2List(1400);
-                int totalNumFiles=0, index=0;
-                double totalFileSize2=0, sumFileSize2=0;
-                GetFileSize2List(inFileName, theFileSize2List, totalNumFiles, totalFileSize2);
-                double sumDuration=0;
+                int index=0;
+                GetFileSize2List(inFileName, theFileSize2List, theTotalNumFiles, theTotalFileSize2);
             #endif
 
             FindDir(inFileName, outFileName, prevTemp, newTemp);
 
             #if Timer>=1
-                ConvertDirect(inFileName, outFileName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                ConvertDirect(inFileName, outFileName, prevTemp, newTemp, ascii, log, logFileData, theTotalNumFiles, index, theTotalFileSize2, theSumFileSize2, theSumDuration, theFileSize2List, overWrite);
             #else
                 ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
             #endif
@@ -558,11 +555,8 @@ int main(int argc, char **argv)
         }
 
         #if Timer>=1
-            //std::vector<double> fileSize2List(1400);
-            int totalNumFiles=0, index=0;
-            double totalFileSize2=0, sumFileSize2=0;
-            GetFileSize2List(inFileName, theFileSize2List, totalNumFiles, totalFileSize2);
-            double sumDuration=0;
+            int index=0;
+            GetFileSize2List(inFileName, theFileSize2List, theTotalNumFiles, theTotalFileSize2);
         #endif
 
         DIR *dir;
@@ -578,7 +572,7 @@ int main(int argc, char **argv)
                 outSubDirName = outFileName + "Elastic/CrossSection/";
 
                 #if Timer>=1
-                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, theTotalNumFiles, index, theTotalFileSize2, theSumFileSize2, theSumDuration, theFileSize2List, overWrite);
                 #else
                     ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
                 #endif
@@ -590,7 +584,7 @@ int main(int argc, char **argv)
                 outSubDirName = outFileName + "Inelastic/CrossSection/";
 
                 #if Timer>=1
-                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, theTotalNumFiles, index, theTotalFileSize2, theSumFileSize2, theSumDuration, theFileSize2List, overWrite);
                 #else
                     ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
                 #endif
@@ -601,7 +595,7 @@ int main(int argc, char **argv)
                 outSubDirName = outFileName + "Fission/CrossSection/";
 
                 #if Timer>=1
-                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, theTotalNumFiles, index, theTotalFileSize2, theSumFileSize2, theSumDuration, theFileSize2List, overWrite);
                 #else
                     ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
                 #endif
@@ -612,7 +606,7 @@ int main(int argc, char **argv)
                 outSubDirName = outFileName + "Capture/CrossSection/";
 
                 #if Timer>=1
-                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, totalNumFiles, index, totalFileSize2, sumFileSize2, sumDuration, theFileSize2List, overWrite);
+                    ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, theTotalNumFiles, index, theTotalFileSize2, theSumFileSize2, theSumDuration, theFileSize2List, overWrite);
                 #else
                     ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
                 #endif
@@ -622,7 +616,7 @@ int main(int argc, char **argv)
                 if(taskIn)
                     delete taskIn;
                 #if Timer>=1
-                    taskIn = new TaskInput(inFileName.c_str(), outFileName.c_str(), ent->d_name, prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, fileIndex, totalNumFiles);
+                    taskIn = new TaskInput(inFileName.c_str(), outFileName.c_str(), ent->d_name, prevTemp, newTemp, ascii, log, overWrite, fileIndex);
                 #else
                     taskIn = new TaskInput(inDirName, outDirName, ent->d_name, prevTemp, newTemp, ascii, log, overWrite);
                 #endif
@@ -1432,7 +1426,7 @@ void ConvertDirect(string inDirName, string outDirName, double prevTemp, double 
                 if(taskIn)
                     delete taskIn;
 
-                taskIn = new TaskInput(inDirName.c_str(), outDirName.c_str(), fileName.c_str(), prevTemp, newTemp, totalFileSize2, sumFileSize2, sumDuration, ascii, log, overWrite, fileIndex, totalNumFiles);
+                taskIn = new TaskInput(inDirName.c_str(), outDirName.c_str(), fileName.c_str(), prevTemp, newTemp, ascii, log, overWrite, fileIndex);
 
                 if(taskInMarsh)
                     delete taskInMarsh;
