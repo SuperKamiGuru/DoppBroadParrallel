@@ -1276,7 +1276,7 @@ void PrintProgress(int index, string fileName, std::vector<double> &fileSize2Lis
     {
         sumFileSize2+=fileSize2List[index];
         sumDuration+=duration;
-        double timeLeft = sumDuration/sumFileSize2*(totalFileSize2-sumFileSize2);
+        double timeLeft = sumDuration*totalFileSize2/sumFileSize2-sumDuration;
         cout << "Files Converted (" << fileCount+1 << "/" << totalNumFiles << "), Duration Since Start " << sumDuration << "s, Time Remaining " << timeLeft << "s\n"
             << "Total Progress [";
         double sizeRatio = sumFileSize2/totalFileSize2;
