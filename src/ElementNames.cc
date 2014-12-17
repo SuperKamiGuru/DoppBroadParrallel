@@ -22,7 +22,6 @@ void ElementNames::ClearStore()
 
 void ElementNames::SetElementNames()
 {
-
     elementName = new string[119];
 
     elementName[0] = "Error";
@@ -40,7 +39,7 @@ void ElementNames::SetElementNames()
     elementName[12] = "Magnesium";
     elementName[13] = "Aluminum";
     elementName[14] = "Silicon";
-    elementName[15] = "Phosphorus";
+    elementName[15] = "Phosphorous";
     elementName[16] = "Sulfur";
     elementName[17] = "Chlorine";
     elementName[18] = "Argon";
@@ -172,7 +171,7 @@ bool ElementNames::CheckName(string name, int Z)
     }
     else
     {
-        cout << "### Error SetElementNames() has not been called yet ###" << endl;
+        cout << "### Error SetElementNames() has not been yet ###" << endl;
     }
 
 

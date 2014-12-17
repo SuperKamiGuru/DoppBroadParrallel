@@ -476,10 +476,6 @@ int main(int argc, char **argv)
 
             cout << "\n" << endl;
 
-            cout << "\n" << outFileList.size() << " Files that will be Created are:" << endl;
-
-            cout << "\n" << endl;
-
             #if Timer>=1
                 int index=0;
                 GetFileSize2List(inFileListNoDep, theFileSize2List, theTotalNumFiles, theTotalFileSize2);
@@ -684,15 +680,17 @@ int main(int argc, char **argv)
 
 }
 
-void GetClosestTempFileList(string inFileName, string outFileName, stringstream& ss, std::vector<string> &inFileList, std::vector<string> &inFileListNoDep, std::vector<string> &outFileList, std::vector<double> &prevTempList, std::vector<double> &newTempList)
+void GetClosestTempFileList(string inFileName, string outFileName, stringstream& ss, std::vector<string> &inFileList,
+                            std::vector<string> &inFileListNoDep, std::vector<string> &outFileList, std::vector<double> &prevTempList, std::vector<double> &newTempList)
 {
-    int best[4], index, numIso, count;
+    int best[4], index, numIso, count, Z, A;
     string isoName, name, outName;
     double temp, tempMatch;
     double tempBest[4]={0.,0.,0.,0.};
     std::vector<string> allFiles, matchList;
     bool check[4]={false, false, false, false};
     stringstream numConv;
+    string process[4]={"Capture","Elastic","Fission","Inelastic"};
 
     ss >> numIso;
     GetAllFiles(inFileName, allFiles);
@@ -700,10 +698,11 @@ void GetClosestTempFileList(string inFileName, string outFileName, stringstream&
     for(int i=0; i<numIso; i++)
     {
         ss >> isoName >> temp;
+        ExtractZA(isoName,Z,A);
         for(int j=0; j<4; j++)
         {
             check[j]=false;
-            tempBest[j]=0.;
+            tempBest[j]=-1.;
         }
         for(int j=0; j<int(allFiles.size()); j++)
         {
@@ -716,7 +715,7 @@ void GetClosestTempFileList(string inFileName, string outFileName, stringstream&
                 {
                     if(FindProcess(allFiles[j], index))
                     {
-                        if(((temp-tempBest[index])>=(temp-tempMatch))&&(tempMatch<temp))
+                        if(((temp-tempBest[index])>=(temp-tempMatch))&&(tempMatch<=temp))
                         {
                             if(CompleteFile(allFiles[j]))
                             {
@@ -742,9 +741,9 @@ void GetClosestTempFileList(string inFileName, string outFileName, stringstream&
                 outName = outFileName+numConv.str()+'k'+'/'+(allFiles[best[k]]).substr(count+1, std::string::npos);
                 outFileList.push_back(outName);
             }
-            else if(k==1||k==0||k==3)
+            else if((k!=2)||(Z>87))
             {
-                cout << "Error: the input CS file for isotope " << isoName << " could not be found for process " << index << "\n" << endl;
+                cout << "Error: the input CS file for isotope " << isoName << " could not be found for process " << process[k] << "\n" << endl;
             }
         }
         numConv.clear();
@@ -947,26 +946,26 @@ void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNo
     {
         for(int j=i+1; j<int(inFileList.size()); j++)
         {
-            if(newTempList[j]<newTempList[i])
+            if(CompareIsotopeNum(inFileList[j], inFileList[i], "<"))
             {
                 SwapListElem(inFileList, outFileList, newTempList, prevTempList, i, j);
             }
-            else if(newTempList[j]==newTempList[i])
+            else if(CompareIsotopeNum(inFileList[j], inFileList[i], "=="))
             {
-                if(CompareIsotopeNum(inFileList[j], inFileList[i], "<"))
+                FindProcess(inFileList[j], process1);
+                FindProcess(inFileList[i], process2);
+
+                if(process1<process2)
                 {
                     SwapListElem(inFileList, outFileList, newTempList, prevTempList, i, j);
                 }
-                else if(CompareIsotopeNum(inFileList[j], inFileList[i], "=="))
+                if(process1==process2)
                 {
-                    FindProcess(inFileList[j], process1);
-                    FindProcess(inFileList[i], process2);
-
-                    if(process1<process2)
+                    if(newTempList[j]<newTempList[i])
                     {
                         SwapListElem(inFileList, outFileList, newTempList, prevTempList, i, j);
                     }
-                    if(process1==process2)
+                    else if(newTempList[j]==newTempList[i])
                     {
                         inFileList.erase(inFileList.begin()+j);
                         outFileList.erase(outFileList.begin()+j);
