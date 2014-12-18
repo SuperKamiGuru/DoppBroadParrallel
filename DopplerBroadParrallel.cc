@@ -52,10 +52,12 @@ using namespace std;
 // X sort the list of input CS files from the macrofile by temperature and isotope so that isotopes with highier temperatures will be broaden from the output of those with lower temp
 // X get program to use natural elements when isotopes are unavailable
 // X change precision of CS to be within 0.1%
-// allow the program to run in parrallel
-// get rid of unnecessary data being passed through the task input (the data that the slaves already contain and the data for PrintProgress) and use global variables instead
+// X allow the program to run in parrallel
+// create a second parrallel version with the slaves being assigned different evergy points to broaden
+// check math used to broaden data
+// X get rid of unnecessary data being passed through the task input (the data that the slaves already contain and the data for PrintProgress) and use global variables instead
 // create a small code that will filter out points in flat regions and use it before and after DopplerBroad in or to improve the speed of Doppler Broad and G4Stork
-// create small code to convert from endf NIST and MCNP to G4NDL
+// X create small code to convert from endf NIST and MCNP to G4NDL
 // allow DopplerBroadMacroCreater to take in G4STORK interpolation files so that multiple CS files are created at intervals to cover the temperature interpolation range for all the isotopes in the material
 // comment out code
 // create manual
@@ -130,6 +132,10 @@ MarshaledTaskOutput *taskOutMarsh;
 MarshaledTaskInput *taskInMarsh;
 TaskInput *taskIn;
 
+//DoBroadening
+//This function is run by the slave when a task is assigned to it
+//this unmarshels the given data and then uses the information to run ConvertFile() which doppler broadens the given file to the given temp
+//finally the results of the broadening are marshaled and sent to the master process for the CheckProgress()
 TOPC_BUF DoBroadening(void *input)
 {
     #if Timer>=1
@@ -171,6 +177,9 @@ TOPC_BUF DoBroadening(void *input)
     return TOPC_MSG( taskOutMarsh->getBuffer(), taskOutMarsh->getBufferSize());
 }
 
+//CheckProgress
+//this function is run by the master process after a slave has finished running DoBroadening()
+//This takes in the results of the task assigned to slave and prints the progress to the termional
 TOPC_ACTION CheckProgress(void *input, void *output)
 {
     #if Timer>=1
@@ -184,6 +193,8 @@ TOPC_ACTION CheckProgress(void *input, void *output)
     return NO_ACTION;
 }
 
+//
+//doppler broadens the given data to the given temperature using multiple processors
 int main(int argc, char **argv)
 {
     TOPC_OPT_trace = 0;
@@ -219,6 +230,7 @@ int main(int argc, char **argv)
     bool ascii=true, log=false;
     stringstream ss;
 
+    //gets user inputs
     if(argc==9)
     {
         ss << argv[1] << ' ' << argv[2] << ' ' << argv[3] << ' ' << argv[4] << ' ' << argv[5] << ' ' << argv[6] << ' ' << argv[7] << ' ' << argv[8];
@@ -297,6 +309,7 @@ int main(int argc, char **argv)
                 }
                 delete data;
 
+                //gets inputs in macrofile
                 int numArg;
                 ss >> numArg;
 
@@ -374,6 +387,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // creates the log files for the master and each of the slaves
     if(log)
     {
         if (outFileName.back()=='/')
@@ -455,6 +469,8 @@ int main(int argc, char **argv)
         }
     }
 
+    //Only the master runs the commands from this point on
+    //the slaves are set on idle until they are called for
     TOPC_raw_begin_master_slave( DoBroadening, CheckProgress, NULL );
 
     #if Timer>=1
@@ -465,11 +481,13 @@ int main(int argc, char **argv)
     {
         if(closestTemp)
         {
+            std::vector<int> appendTasks, appendFileInd;
             std::vector<double> prevTempList, newTempList;
             std::vector<string> inFileList, inFileListNoDep, outFileList;
-            string inDirName, outDirName;
+            string inDirName, outDirName, fileName;
             int temp=1;
 
+            // finds the files with temperatures closest to that of the temperatures that the files are to be broadened too and puts them in a list
             GetClosestTempFileList(inFileName, outFileName, ss, inFileList, inFileListNoDep, outFileList, prevTempList, newTempList);
 
             cout << "\n" << inFileList.size() << " Files to be Broadened" << endl;
@@ -478,6 +496,7 @@ int main(int argc, char **argv)
 
             #if Timer>=1
                 int index=0;
+                //gets the squared size of each file and places them in a list
                 GetFileSize2List(inFileListNoDep, theFileSize2List, theTotalNumFiles, theTotalFileSize2);
             #endif
 
@@ -485,10 +504,11 @@ int main(int argc, char **argv)
             {
 
                 inDirName = (inFileList[i]).substr(0,(inFileList[i]).find_last_of('/')+1);
-                inFileList[i] = (inFileList[i]).substr((inFileList[i]).find_last_of('/')+1, string::npos);
+                fileName = (inFileList[i]).substr((inFileList[i]).find_last_of('/')+1, string::npos);
 
                 outDirName = (outFileList[i]).substr(0,(outFileList[i]).find_last_of('/')+1);
 
+                // creates the output directory if it doesn't already exist
                 if(!(DirectoryExists(outDirName.c_str())))
                 {
                     temp = system( ("mkdir -p -m=666 "+outDirName).c_str());
@@ -501,21 +521,87 @@ int main(int argc, char **argv)
                 }
                 if(temp)
                 {
-                    if(taskIn)
-                        delete taskIn;
-                    #if Timer>=1
-                        taskIn = new TaskInput(inDirName.c_str(), outDirName.c_str(), (inFileList[i]).c_str(), prevTempList[i], newTempList[i], ascii, log, overWrite, fileIndex);
-                    #else
-                        taskIn = new TaskInput(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], ascii, log, overWrite);
-                    #endif
+                    // makes sure that the input file exists and is complete
+                    if(CompleteFile(inFileList[i]))
+                    {
+                        if(taskIn)
+                            delete taskIn;
 
-                    if(taskInMarsh)
+                        //stores data to be transfered to the slave for broadening
+                        #if Timer>=1
+                            taskIn = new TaskInput(inDirName.c_str(), outDirName.c_str(), (fileName).c_str(), prevTempList[i], newTempList[i], ascii, log, overWrite, fileIndex);
+                        #else
+                            taskIn = new TaskInput(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], ascii, log, overWrite);
+                        #endif
+
+                        if(taskInMarsh)
                         delete taskInMarsh;
 
-                    taskInMarsh = new MarshaledTaskInput(taskIn);
-                    TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
+                        // marshels the data into void type data stream
+                        taskInMarsh = new MarshaledTaskInput(taskIn);
+
+                        // transfers the data to the slave
+                        TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
+                    }
+                    else
+                    {
+                        appendTasks.push_back(i);
+                        appendFileInd.push_back(fileIndex);
+                    }
                 }
                 fileIndex++;
+            }
+
+            int curFileIndex;
+            double duration=0.;
+            std::clock_t start;
+            start = std::clock();
+            while(int(appendTasks.size())>0)
+            {
+                for(int i=0; i<int(appendTasks.size()); i++)
+                {
+
+                    if(CompleteFile(string(inFileList[i])))
+                    {
+                        curFileIndex=appendFileInd[i];
+                        inDirName = (inFileList[i]).substr(0,(inFileList[i]).find_last_of('/')+1);
+                        fileName = (inFileList[i]).substr((inFileList[i]).find_last_of('/')+1, string::npos);
+
+                        outDirName = (outFileList[i]).substr(0,(outFileList[i]).find_last_of('/')+1);
+
+                        //stores data to be transfered to the slave for broadening
+                        if(taskIn)
+                            delete taskIn;
+                        #if Timer>=1
+                            taskIn = new TaskInput(inDirName.c_str(), outDirName.c_str(), (fileName).c_str(), prevTempList[i], newTempList[i], ascii, log, overWrite, curFileIndex);
+                        #else
+                            taskIn = new TaskInput(inDirName, outDirName, inFileList[i], prevTempList[i], newTempList[i], ascii, log, overWrite);
+                        #endif
+
+                        if(taskInMarsh)
+                        delete taskInMarsh;
+
+                        taskInMarsh = new MarshaledTaskInput(taskIn);
+
+                        // transfers the data to the slave
+                        TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
+
+                        if(appendFileInd[i]>curFileIndex)
+                        {
+                            for(int j=i; j<int(appendTasks.size()); j++)
+                            {
+                                appendFileInd[j]--;
+                            }
+                        }
+
+                        appendTasks.erase(appendTasks.begin()+i);
+                        appendFileInd.erase(appendFileInd.begin()+i);
+                        i--;
+                    }
+                }
+                duration += (std::clock()-start)/CLOCKS_PER_SEC;
+                if(duration>604800)
+                    break;
             }
 
             //TOPC_raw_end_master_slave();
@@ -527,9 +613,12 @@ int main(int argc, char **argv)
                 GetFileSize2List(inFileName, theFileSize2List, theTotalNumFiles, theTotalFileSize2);
             #endif
 
+            // finds the temperature directory in the inFileName path that corresponds to the given previous temperature
+            // finds/sets the temperature directory in the outFileName path that corresponds to the given new temperature
             FindDir(inFileName, outFileName, prevTemp, newTemp);
 
             #if Timer>=1
+                // broadens the files contianed in the given directory
                 ConvertDirect(inFileName, outFileName, prevTemp, newTemp, ascii, log, logFileData, theTotalNumFiles, index, theTotalFileSize2, theSumFileSize2, theSumDuration, theFileSize2List, overWrite);
             #else
                 ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
@@ -547,6 +636,8 @@ int main(int argc, char **argv)
         // else if the inFileName doesn't already contain the temperature directory search in the given input file directory for a temperature directory with temperature prevTemp
         else
         {
+             // finds the temperature directory in the inFileName path that corresponds to the given previous temperature
+            // finds/sets the temperature directory in the outFileName path that corresponds to the given new temperature
              FindDir(inFileName, outFileName, prevTemp, newTemp);
         }
 
@@ -559,7 +650,7 @@ int main(int argc, char **argv)
         struct dirent *ent;
         if ((dir = opendir (inFileName.c_str())) != NULL)
         {
-          /* print all the files and directories within directory */
+          // loops through the files in the directory
           while ((ent = readdir (dir)) != NULL)
           {
             if(string(ent->d_name)=="Elastic")
@@ -568,6 +659,7 @@ int main(int argc, char **argv)
                 outSubDirName = outFileName + "Elastic/CrossSection/";
 
                 #if Timer>=1
+                    // broadens the files contianed in the given directory
                     ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, theTotalNumFiles, index, theTotalFileSize2, theSumFileSize2, theSumDuration, theFileSize2List, overWrite);
                 #else
                     ConvertDirect(inSubDirName, outSubDirName, prevTemp, newTemp, ascii, log, logFileData, overWrite);
@@ -609,6 +701,7 @@ int main(int argc, char **argv)
             }
             else
             {
+                // stores the input data into an object to be sent to the slave
                 if(taskIn)
                     delete taskIn;
                 #if Timer>=1
@@ -621,6 +714,8 @@ int main(int argc, char **argv)
                     delete taskInMarsh;
 
                 taskInMarsh = new MarshaledTaskInput(taskIn);
+
+                //sends the data to the slave
                 TOPC_raw_submit_task_input( TOPC_MSG(taskInMarsh->getBuffer(), taskInMarsh->getBufferSize()) );
                 fileIndex++;
             }
@@ -680,6 +775,8 @@ int main(int argc, char **argv)
 
 }
 
+//GetClosestTempFileList
+//Finds the files with temperatures closest to the temperatures that the files are to be broadened to and places them in a list
 void GetClosestTempFileList(string inFileName, string outFileName, stringstream& ss, std::vector<string> &inFileList,
                             std::vector<string> &inFileListNoDep, std::vector<string> &outFileList, std::vector<double> &prevTempList, std::vector<double> &newTempList)
 {
@@ -753,6 +850,8 @@ void GetClosestTempFileList(string inFileName, string outFileName, stringstream&
     SortList(inFileList, inFileListNoDep, outFileList, newTempList, prevTempList);
 }
 
+//GetAllFiles
+//creates a list off all of the files contianed in the given directory and the subdirectories inside of it
 bool GetAllFiles(string inFileName, std::vector<string> &inFileList)
 {
     DIR *dir;
@@ -784,6 +883,8 @@ bool GetAllFiles(string inFileName, std::vector<string> &inFileList)
     return true;
 }
 
+//FindTemp
+//Finds the temperature directory that the file is stored in
 bool FindTemp(string name, double &tempMatch)
 {
     bool foundTemp=false;
@@ -822,6 +923,8 @@ bool FindTemp(string name, double &tempMatch)
     return foundTemp;
 }
 
+//FindTemp
+//Finds the temperature directory that the file is stored in and the postion along the file name that the temperature directory is listed
 bool FindTemp(string name, double tempMatch, int &count)
 {
     bool foundTemp=false;
@@ -864,6 +967,8 @@ bool FindTemp(string name, double tempMatch, int &count)
     return foundTemp;
 }
 
+//FindProcess
+//finds which process directory the given file is within
 bool FindProcess(string fileName, int &process)
 {
     bool found=false;
@@ -902,6 +1007,8 @@ bool FindProcess(string fileName, int &process)
     return found;
 }
 
+//CompleteFile
+//Determines if the given file exists and if it is complete or not
 bool CompleteFile(string fileName)
 {
     stringstream stream;
@@ -937,6 +1044,8 @@ bool CompleteFile(string fileName)
         return false;
 }
 
+//SortList
+//sorts the file list by temperature then Z value, then process
 void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNoDep, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList)
 {
     int process1, process2;
@@ -946,26 +1055,26 @@ void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNo
     {
         for(int j=i+1; j<int(inFileList.size()); j++)
         {
-            if(CompareIsotopeNum(inFileList[j], inFileList[i], "<"))
+            if(newTempList[j]<newTempList[i])
             {
                 SwapListElem(inFileList, outFileList, newTempList, prevTempList, i, j);
             }
-            else if(CompareIsotopeNum(inFileList[j], inFileList[i], "=="))
+            else if(newTempList[j]==newTempList[i])
             {
-                FindProcess(inFileList[j], process1);
-                FindProcess(inFileList[i], process2);
-
-                if(process1<process2)
+                if(CompareIsotopeNum(inFileList[j], inFileList[i], "<"))
                 {
                     SwapListElem(inFileList, outFileList, newTempList, prevTempList, i, j);
                 }
-                if(process1==process2)
+                else if(CompareIsotopeNum(inFileList[j], inFileList[i], "=="))
                 {
-                    if(newTempList[j]<newTempList[i])
+                    FindProcess(inFileList[j], process1);
+                    FindProcess(inFileList[i], process2);
+
+                    if(process1<process2)
                     {
                         SwapListElem(inFileList, outFileList, newTempList, prevTempList, i, j);
                     }
-                    else if(newTempList[j]==newTempList[i])
+                    else if(process1==process2)
                     {
                         inFileList.erase(inFileList.begin()+j);
                         outFileList.erase(outFileList.begin()+j);
@@ -1001,6 +1110,8 @@ void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNo
     }
 }
 
+//SwapListElem
+//swaps the postions of elements i and j for each of the given lists
 void SwapListElem(std::vector<string> &inFileList, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList, int i, int j)
 {
     double newTemp, prevTemp;
@@ -1022,6 +1133,8 @@ void SwapListElem(std::vector<string> &inFileList, std::vector<string> &outFileL
     outFileList[j]=outName;
 }
 
+// CompareIsotopeNum
+//Compares the isotope numbers
 bool CompareIsotopeNum(string name1, string name2, string comparison)
 {
     stringstream numConv;
@@ -1120,6 +1233,9 @@ bool CompareIsotopeNum(string name1, string name2, string comparison)
     }
 }
 
+// FindDir
+// finds the temperature directory in the inFileName path that corresponds to the given previous temperature
+// finds/sets the temperature directory in the outFileName path that corresponds to the given new temperature
 bool FindDir(string &inFileName, string &outFileName, double prevTemp, double newTemp)
 {
     DIR *dir;
@@ -1177,6 +1293,8 @@ bool FindDir(string &inFileName, string &outFileName, double prevTemp, double ne
     return check;
 }
 
+//ExtractDouble
+//extracts the first double it finds in the string starting from the end
 bool ExtractDouble(string name, double &num)
 {
     bool foundDouble = false;
@@ -1194,6 +1312,8 @@ bool ExtractDouble(string name, double &num)
     return foundDouble;
 }
 
+//GetClosestTempDir
+//Finds the directory with the temperature closest to newTemp
 void GetClosestTempDir(string &inFileName, double &prevTemp, double newTemp)
 {
     string closestName, temp;
@@ -1237,7 +1357,8 @@ void GetClosestTempDir(string &inFileName, double &prevTemp, double newTemp)
 }
 
 #if Timer>=1
-
+//GetFileSize2List
+//gets the squared file size for every file in the given list and then stores the data in a new list
 void GetFileSize2List(std::vector<string> &fileList, std::vector<double> &fileSize2List, int &totalNumFiles, double &totalFileSize2)
 {
     for(int i=0; i<int(fileList.size()); i++)
@@ -1249,6 +1370,8 @@ void GetFileSize2List(std::vector<string> &fileList, std::vector<double> &fileSi
 
 }
 
+//GetFileSize2
+//Gets the squared size of the given file
 double GetFileSize2(string fileName)
 {
     std::ifstream in( fileName.c_str() , std::ios::binary | std::ios::ate );
@@ -1269,6 +1392,8 @@ double GetFileSize2(string fileName)
 
 }
 
+//PrintProgress
+//Prints the total progress of the doppler broadening of all of the files
 void PrintProgress(int index, string fileName, std::vector<double> &fileSize2List, double &totalFileSize2, int &totalNumFiles, double duration, double &sumFileSize2, double &sumDuration, bool success)
 {
     if(success)
@@ -1315,6 +1440,8 @@ void PrintProgress(int index, string fileName, std::vector<double> &fileSize2Lis
 
 }
 
+//GetFileSize2List
+//Gets the squared size of all of the appropriate files in the given directory and stores them in a list
 void GetFileSize2List(string inFileName, std::vector<double> &fileSize2List, int &totalNumFiles, double &totalFileSize2)
 {
     string filename, inSubDirName;
@@ -1364,6 +1491,8 @@ void GetFileSize2List(string inFileName, std::vector<double> &fileSize2List, int
     }
 }
 
+//GetDirectoryFileSize2
+//Gets the squared size of all the files in the given directory and adds them to the given list
 void GetDirectoryFileSize2(string inDirName, std::vector<double> &fileSize2List, int &totalNumFiles, double &totalFileSize2)
 {
     DIR *dir;
@@ -1394,6 +1523,8 @@ void GetDirectoryFileSize2(string inDirName, std::vector<double> &fileSize2List,
     }
 }
 
+//ConvertDirect
+// Broadens the files in the given directory to the given temperature
 void ConvertDirect(string inDirName, string outDirName, double prevTemp, double newTemp, bool ascii, bool log, std::ofstream* logFile,
     int totalNumFiles, int &index, double &totalFileSize2, double &sumFileSize2, double &sumDuration, std::vector<double> &fileSize2List, bool overWrite)
 {
@@ -1449,6 +1580,8 @@ void ConvertDirect(string inDirName, string outDirName, double prevTemp, double 
     }
 }
 
+//isApplicable
+//checks the name of the file to make sure that it is cross-section data file
 bool isApplicable(string fileName)
 {
     int Z=-1, A=-1;
@@ -1459,6 +1592,8 @@ bool isApplicable(string fileName)
         return true;
 }
 
+//ExtractZA
+//Extracts the Z and the A value from the file name
 void ExtractZA(string fileName, int &Z, int &A)
 {
     if(fileName=="")
@@ -1521,6 +1656,8 @@ void ExtractZA(string fileName, int &Z, int &A)
 
 #else
 
+//ConvertDirect
+//Doppler broadens the files in th given directory to the given temperature
 void ConvertDirect(string inDirName, string outDirName, double prevTemp, double newTemp, bool ascii, bool log, std::ofstream* logFile, overWrite)
 {
     DIR *dir;
@@ -1567,6 +1704,8 @@ void ConvertDirect(string inDirName, string outDirName, double prevTemp, double 
 
 #endif
 
+//ConvertFile
+//Doppler broadens the given file to the given temperature
 bool ConvertFile(string inFileName, string outFileName, double prevTemp, double newTemp, bool ascii, bool log, std::ofstream* logFile, bool overWrite)
 {
 
@@ -1674,6 +1813,8 @@ bool ConvertFile(string inFileName, string outFileName, double prevTemp, double 
     return success;
 }
 
+//ConvertFile
+//Doppler broadens the given file to the given temperature
 bool ConvertFile(string inDirName, string outDirName, string fileName, double prevTemp, double newTemp, bool ascii, bool log, std::ofstream* logFile, bool overWrite)
 {
     string partFileName;
@@ -1770,6 +1911,8 @@ bool ConvertFile(string inDirName, string outDirName, string fileName, double pr
     return success;
 }
 
+//DirectoryExists
+//Checks if the given directory exists
 bool DirectoryExists( const char* pzPath )
 {
     if ( pzPath == NULL) return false;
@@ -1788,6 +1931,8 @@ bool DirectoryExists( const char* pzPath )
     return bExists;
 }
 
+//ExtractZA
+//extracts the Z and the A isotope numbers from the file name
 void ExtractZA(string fileName, int &Z, int &A, bool log, std::ofstream* logFile)
 {
         std::size_t startPos=0;
@@ -1853,6 +1998,8 @@ void ExtractZA(string fileName, int &Z, int &A, bool log, std::ofstream* logFile
         }
 }
 
+//GetNuclearMass
+//Gets the mass of the nuclei in MeV
 double GetNuclearMass(double A, double Z, bool log, std::ofstream* logFile)
 {
     double mass;
@@ -1876,6 +2023,8 @@ double GetNuclearMass(double A, double Z, bool log, std::ofstream* logFile)
     return mass;
 }
 
+//NuclearMass
+// approximates the mass of the nuclei
 double NuclearMass(double A, double Z, bool log, std::ofstream* logFile)
 {
   if (A < 1 || Z < 0 || Z > A) {
@@ -1894,6 +2043,8 @@ double NuclearMass(double A, double Z, bool log, std::ofstream* logFile)
   return mass;
 }
 
+//AtomicMass
+//approximates the mass of the entire atom
 double  AtomicMass(double A, double Z)
 {
   const double hydrogen_mass_excess = G4NucleiPropertiesTableAME03::GetMassExcess(1,1);
@@ -1905,6 +2056,8 @@ double  AtomicMass(double A, double Z)
   return mass;
 }
 
+//BindingEnergy
+//Approximates the binding energy of the isotope
 double  BindingEnergy(double A, double Z)
 {
   //
@@ -1922,6 +2075,8 @@ double  BindingEnergy(double A, double Z)
   return -binding;
 }
 
+//DoppBroad
+//Doppler broadens the given file
 int DoppBroad(string inFileName, string outFileName, double prevTemp, double newTemp, double isoMassC2, bool ascii, bool log, std::ofstream* logFile)
 {
 
@@ -2172,6 +2327,8 @@ int DoppBroad(string inFileName, string outFileName, double prevTemp, double new
     return 0 ;
 }
 
+//findCS
+//finds the cross-section pointed to by the given energy in the given array
 double findCS(double nKEnerTrans, const double* prevEnVec, const double* prevCSVec, int vecSize)
 {
     int index=0;
@@ -2251,6 +2408,8 @@ double findCS(double nKEnerTrans, const double* prevEnVec, const double* prevCSV
 
 }
 
+//GetDataStream
+//Gets the contents of the given file and puts it into a data stream
 void GetDataStream( string filename , std::stringstream& ss, bool log, std::ofstream* logFile)
 {
    string* data=NULL;
@@ -2341,7 +2500,8 @@ void GetDataStream( string filename , std::stringstream& ss, bool log, std::ofst
    delete data;
 }
 
-
+//SetDataStream
+//opens the given file and stores the data contianed with in the given stream inside of it
 void SetDataStream( string filename , std::stringstream& ss, bool ascii, bool log, std::ofstream* logFile )
 {
     //bool cond=true;
