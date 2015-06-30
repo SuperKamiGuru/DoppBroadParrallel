@@ -198,7 +198,7 @@ TOPC_ACTION CheckProgress(void *input, void *output)
 int main(int argc, char **argv)
 {
     TOPC_OPT_trace = 0;
-	TOPC_OPT_slave_timeout=604800;
+	TOPC_OPT_slave_timeout=6048000;
     TOPC_init(&argc, &argv);
     master = bool(TOPC_is_master());
     int processID = TOPC_rank();
