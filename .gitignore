@@ -1,0 +1,15 @@
+.gitignore~
+DoppBroadParrallel.cbp
+DoppBroadParrallel.depend
+DoppBroadParrallel.layout
+obj/
+CMakeCache.txt
+CMakeFiles/
+CMakeLists.txt~
+Config.conf
+Makefile
+cmake_install.cmake
+dopplerbroadpara
+procgroup
+procgroup~
+

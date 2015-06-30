@@ -49,7 +49,10 @@ using namespace std;
 // X take in int to select whether the data will be doppler broadened from the closest existing temperature CS file (See StorkElementData) or from prevTemp
 // X take sudo or root password so that it can create files in root protected areas
 // X sort the list of input CS files from the macrofile by temperature and isotope so that isotopes with highier temperatures will be broaden from the output of those with lower temp
+
+// check if this is true
 // X get program to use natural elements when isotopes are unavailable
+
 // X change precision of CS to be within 0.1%
 // X allow the program to run in parrallel
 // create a second parrallel version with the slaves being assigned different evergy points to broaden
