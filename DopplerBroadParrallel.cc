@@ -15,7 +15,6 @@ using namespace std;
 
 #include "include/Random/RandomEngine.h"
 #include "include/Random/RanecuEngine.h"
-//#include <CLHEP/Random/Randomize.h>
 #include "include/Random/RandGauss.h"
 #include "include/Random/RandGaussQ.h"
 #include <iostream>
@@ -50,7 +49,10 @@ using namespace std;
 // X take in int to select whether the data will be doppler broadened from the closest existing temperature CS file (See StorkElementData) or from prevTemp
 // X take sudo or root password so that it can create files in root protected areas
 // X sort the list of input CS files from the macrofile by temperature and isotope so that isotopes with highier temperatures will be broaden from the output of those with lower temp
+
+// check if this is true
 // X get program to use natural elements when isotopes are unavailable
+
 // X change precision of CS to be within 0.1%
 // X allow the program to run in parrallel
 // create a second parrallel version with the slaves being assigned different evergy points to broaden
@@ -61,6 +63,8 @@ using namespace std;
 // allow DopplerBroadMacroCreater to take in G4STORK interpolation files so that multiple CS files are created at intervals to cover the temperature interpolation range for all the isotopes in the material
 // comment out code
 // create manual
+// Check for Possible error with the created files not compressing properly
+
 
 // default mass units are m*c^2=MeV, the same as energy
 // default momentum units are p*c=MeV, same as energy
@@ -90,6 +94,7 @@ bool CompleteFile(string fileName);
 void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNoDep, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList);
 void SwapListElem(std::vector<string> &inFileList, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList, int i, int j);
 bool CompareIsotopeNum(string name1, string name2, string comparison);
+void InsertListElem(std::vector<string> &inFileList, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList, int startPos, int endPos);
 bool DirectoryExists( const char* pzPath );
 bool FindDir(string &inFileName, string &outFileName, double prevTemp, double newTemp);
 bool ExtractDouble(string name, double &num);
@@ -1045,7 +1050,10 @@ bool CompleteFile(string fileName)
 }
 
 //SortList
-//sorts the file list by temperature then Z value, then process
+//sorts the file list by temperature then Z value, and then by process
+//if an isotope appears more than once in the list the starting files
+//for the highier temperature versions are set to the output of the next
+//heighest temperature version too save time
 void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNoDep, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList)
 {
     int process1, process2;
@@ -1055,13 +1063,13 @@ void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNo
     {
         for(int j=i+1; j<int(inFileList.size()); j++)
         {
-            if(newTempList[j]<newTempList[i])
+            if(newTempList[i]<newTempList[j])
             {
                 SwapListElem(inFileList, outFileList, newTempList, prevTempList, i, j);
             }
             else if(newTempList[j]==newTempList[i])
             {
-                if(CompareIsotopeNum(inFileList[j], inFileList[i], "<"))
+                if(CompareIsotopeNum(inFileList[i], inFileList[j], "<"))
                 {
                     SwapListElem(inFileList, outFileList, newTempList, prevTempList, i, j);
                 }
@@ -1090,19 +1098,20 @@ void SortList(std::vector<string> &inFileList, std::vector<string> &inFileListNo
 
     for(int i=1; i<int(inFileList.size()); i++)
     {
-        for(int j=0; j<i; j++)
+        for(int j=i+1; j<int(inFileList.size()); j++)
         {
-            if(newTempList[j]>prevTempList[i])
+            if(CompareIsotopeNum(inFileList[j], inFileList[i], "=="))
             {
-                if(CompareIsotopeNum(inFileList[j], inFileList[i], "=="))
-                {
-                    FindProcess(inFileList[j], process1);
-                    FindProcess(inFileList[i], process2);
+                FindProcess(inFileList[j], process1);
+                FindProcess(inFileList[i], process2);
 
-                    if(process1==process2)
+                if(process1==process2)
+                {
+                    if((newTempList[j]>prevTempList[i])&&(newTempList[j]<newTempList[i]))
                     {
                         prevTempList[i]=newTempList[j];
                         inFileList[i]=outFileList[j];
+                        InsertListElem(inFileList, outFileList, newTempList, prevTempList, j, i);
                     }
                 }
             }
@@ -1231,6 +1240,19 @@ bool CompareIsotopeNum(string name1, string name2, string comparison)
         cout << "\nError Comparison symbol is not recognized in CompareIsotopeNum\n" << endl;
         return false;
     }
+}
+
+void InsertListElem(std::vector<string> &inFileList, std::vector<string> &outFileList, std::vector<double> &newTempList, std::vector<double> &prevTempList, int startPos, int endPos)
+{
+    newTempList.insert(newTempList.begin()+endPos, newTempList[startPos]);
+    prevTempList.insert(prevTempList.begin()+endPos, prevTempList[startPos]);
+    inFileList.insert(inFileList.begin()+endPos, inFileList[startPos]);
+    outFileList.insert(outFileList.begin()+endPos, outFileList[startPos]);
+
+    newTempList.erase(newTempList.begin()+startPos);
+    prevTempList.erase(prevTempList.begin()+startPos);
+    inFileList.erase(inFileList.begin()+startPos);
+    outFileList.erase(outFileList.begin()+startPos);
 }
 
 // FindDir
