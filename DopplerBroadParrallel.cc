@@ -862,6 +862,15 @@ bool GetAllFiles(string inFileName, std::vector<string> &inFileList)
     DIR *dir;
     struct dirent *ent;
     string name;
+    bool csDir=false;
+    int pos1, pos2;
+
+    pos1=inFileName.find_last_of('/');
+    pos2=inFileName.find_last_of('/', pos1-1);
+    if((pos2!=int(inFileName.length()))&&(inFileName.substr(pos2+1, pos1-pos2)=="CrossSection/"))
+    {
+        csDir=true;
+    }
 
     if ((dir = opendir (inFileName.c_str())) != NULL)
     {
@@ -873,7 +882,7 @@ bool GetAllFiles(string inFileName, std::vector<string> &inFileList)
             {
 
             }
-            else
+            else if(csDir)
             {
                 inFileList.push_back(inFileName+ent->d_name);
             }
